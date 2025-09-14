@@ -16,21 +16,17 @@ from PIL import Image
 
 class castingDatasetPreprocess:
     def __init__(self, data_dir, mode='train'):
-        if mode == 'train':
-            self.image_paths = []
-            for folder_name in sorted(os.listdir(data_dir)):
-                if not osp.isdir(osp.join(data_dir, folder_name)): continue
-                
-                image_paths = glob(osp.join(data_dir, folder_name, "*.jpg"))
-                self.image_paths += image_paths
-                
-            csv_path                    = osp.join(data_dir, 'labels.csv')
-            self.labels, self.densities = self.read_label_csv(csv_path)
-        
-        elif mode == 'test':
-            self.image_paths  = glob(osp.join(data_dir, mode, '*.png'))
-        
-        
+        self.image_paths = []
+        for folder_name in sorted(os.listdir(osp.join(data_dir, mode))):
+            if not osp.isdir(osp.join(data_dir, mode, folder_name)): continue
+            
+            image_paths = glob(osp.join(data_dir, mode, folder_name, "*.jpg"))
+            self.image_paths += image_paths
+            
+        csv_path = osp.join(data_dir, 'labels.csv')
+        self.labels, self.densities = self.read_label_csv(csv_path)
+    
+    
     def read_label_csv(self, csv_path):
         label_csv = pd.read_csv(csv_path)
         
@@ -43,7 +39,7 @@ class castingDatasetPreprocess:
 
 class castingDataset(Dataset):
     def __init__(self, data_dir, mode='train'):
-        data_preprocess  = castingDatasetPreprocess(data_dir)
+        data_preprocess  = castingDatasetPreprocess(data_dir, mode)
         self.image_paths = data_preprocess.image_paths
         self.labels      = data_preprocess.labels
         self.densities   = data_preprocess.densities
