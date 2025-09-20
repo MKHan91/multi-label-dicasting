@@ -49,6 +49,7 @@ def main():
             all_preds = []
             all_labels = []
             prev_f1 = 0.
+            elapsed_time = 0.
             for idx, (image, label, density) in enumerate(train_loader):
                 start = time.time()
 
@@ -70,15 +71,15 @@ def main():
                 preds = (torch.sigmoid(logits) > test_cfg.threshold).int().cpu().numpy()
                 all_preds.append(preds)
                 all_labels.append(label.cpu().numpy())
-                    
+                
+                end = time.time()
+                elapsed_time += (end - start)
                 if idx % 100 == 0:
-                    end = time.time()
-                    elapsed_time = end - start
-                    
+                    elapsed_time /= 100
                     print_string = (f"Epoch: [{epoch + 1}/{cfg.num_epochs:>4d}] | Step: {idx:>5d}/{len(train_loader)} | " 
                                     f"Elapsed time: {elapsed_time/60:.3f}min | train_loss: {loss:>.4f}")
                     print(print_string)
-                
+
             avg_loss = train_loss / len(train_loader)
             precision = precision_score(all_labels, all_preds, average='micro')
             recall = recall_score(all_labels, all_preds, average='micro')
