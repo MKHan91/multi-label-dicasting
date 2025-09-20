@@ -14,7 +14,7 @@ class TrainConfig:
     model_name: str  = 'resnet50'
     
     date_name        = now.strftime("%Y%m%d_%H%M%S")
-    data_dir: Path   = Path("/content/drive/MyDrive/SEMINAR/DATASET/알루미늄 주조 공정 데이터")
+    data_dir: Path   = Path("/content/drive/MyDrive/SEMINAR/DATASET/die_casting")
     model_dir: Path  = BASE_DIR / "experiments" / "models" / f"{model_name}_{date_name}"
     log_dir: Path    = BASE_DIR / "experiments" / "logs" / f"{model_name}_{date_name}"
     

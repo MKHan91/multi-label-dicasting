@@ -1,5 +1,6 @@
 import os
 import os.path as osp
+import time
 
 from die_casting_loader import castingDataset
 from die_casting_network import MultiLabelwithDensity
@@ -15,6 +16,7 @@ from sklearn.metrics import f1_score, recall_score, precision_score
 
 def main():
     cfg = TrainConfig()
+    test_cfg = TestConfig()
     
     model = MultiLabelwithDensity(num_classes=cfg.num_classes)
     model = model.to(cfg.device)
@@ -48,6 +50,8 @@ def main():
             all_labels = []
             prev_f1 = 0.
             for idx, (image, label, density) in enumerate(train_loader):
+                start = time.time()
+
                 optimizer.zero_grad()
                 
                 image = image.to(cfg.device)
@@ -66,11 +70,14 @@ def main():
                 preds = (torch.sigmoid(logits) > test_cfg.threshold).int().cpu().numpy()
                 all_preds.append(preds)
                 all_labels.append(label.cpu().numpy())
-
+                    
                 if idx % 100 == 0:
-                    print_string = (f"\rEpoch: [{epoch + 1}/{cfg.num_epochs:>4d}] | Step: {idx:>5d}/{len(train_loader)} | " 
-                                    f"train_loss: {loss:>.4f}")
-                    print(print_string, end='')
+                    end = time.time()
+                    elapsed_time = end - start
+                    
+                    print_string = (f"Epoch: [{epoch + 1}/{cfg.num_epochs:>4d}] | Step: {idx:>5d}/{len(train_loader)} | " 
+                                    f"Elapsed time: {elapsed_time/60:.3f}min | train_loss: {loss:>.4f}")
+                    print(print_string)
                 
             avg_loss = train_loss / len(train_loader)
             precision = precision_score(all_labels, all_preds, average='micro')
@@ -93,8 +100,6 @@ def main():
                 
 
     elif cfg.mode == 'test':
-        test_cfg = TestConfig()
-        
         os.makedirs(test_cfg.test_results_dir, exist_ok=True)
         
         dataset = castingDataset(cfg.data_dir, mode='test')

@@ -27,7 +27,8 @@ density_map = {
     
 }
 # 데이터 경로
-data_dir = "/home/dev/DATASET/die_casting"
+base_dir = "/content/drive/MyDrive/SEMINAR/DATASET/die_casting"
+data_dir = osp.join(base_dir, "train")
 
 classes = sorted(os.listdir(data_dir))
 print(f'분류 클래스: {classes}')
@@ -58,6 +59,6 @@ for class_idx, class_name in enumerate(classes):
 
 
 df = pd.DataFrame(img_labels)
-df.to_csv("/home/dev/DATASET/die_casting/labels.csv", index=False)
+df.to_csv(osp.join(base_dir, "labels.csv"), index=False)
 # df.to_csv("./labels.csv", index=False)
 print('저장 완료')
