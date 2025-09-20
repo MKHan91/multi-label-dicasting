@@ -42,6 +42,9 @@ def main():
         criterion = nn.BCEWithLogitsLoss()
         # scheduler = CosineAnnealingLR(optimizer, T_max=cfg.num_epochs)
         
+        steps_per_epoch = len(train_loader)
+        total_steps = steps_per_epoch * cfg.num_epochs
+        
         for epoch in range(cfg.num_epochs):
             model.train()
             train_loss = torch.tensor(0., dtype=torch.float32, device=cfg.device)
@@ -70,17 +73,21 @@ def main():
                 
                 preds = (torch.sigmoid(logits) > test_cfg.threshold).int().cpu().numpy()
                 all_preds.append(preds)
-                all_labels.append(label.cpu().numpy())
+                all_labels.append(label)
                 
                 end = time.time()
                 elapsed_time += (end - start)
                 if idx % 100 == 0:
-                    elapsed_time /= 100
-                    print_string = (f"Epoch: [{epoch + 1}/{cfg.num_epochs:>4d}] | Step: {idx:>5d}/{len(train_loader)} | " 
+                    print_string = (f"Epoch: [{epoch + 1}/{cfg.num_epochs:>4d}] | Step: {idx:>5d}/{steps_per_epoch} | " 
                                     f"Elapsed time: {elapsed_time/60:.3f}min | train_loss: {loss:>.4f}")
                     print(print_string)
+                    elapsed_time = 0.
 
-            avg_loss = train_loss / len(train_loader)
+            avg_loss = train_loss / steps_per_epoch
+
+            all_labels = torch.cat(all_labels).numpy()
+            all_preds = torch.cat(all_preds).numpy()
+
             precision = precision_score(all_labels, all_preds, average='micro')
             recall = recall_score(all_labels, all_preds, average='micro')
             f1 = f1_score(all_labels, all_preds, average='micro')
