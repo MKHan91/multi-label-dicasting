@@ -19,12 +19,13 @@ def main():
     model = MultiLabelwithDensity(num_classes=cfg.num_classes)
     model = model.to(cfg.device)
     
+
     if cfg.mode == 'train':
+        writer = SummaryWriter(cfg.log_dir)
+        
         # 폴더 존재 점검
         os.makedirs(cfg.model_dir, exist_ok=True)
         os.makedirs(cfg.log_dir, exist_ok=True)
-        
-        writer = SummaryWriter(cfg.log_dir)
         
         # 학습 데이터
         dataset = castingDataset(cfg.data_dir, mode='train')
@@ -43,6 +44,9 @@ def main():
             model.train()
             train_loss = torch.tensor(0., dtype=torch.float32, device=cfg.device)
             
+            all_preds = []
+            all_labels = []
+            prev_f1 = 0.
             for idx, (image, label, density) in enumerate(train_loader):
                 optimizer.zero_grad()
                 
@@ -51,6 +55,7 @@ def main():
                 density = density.to(cfg.device).unsqueeze(1)
                 
                 logits = model(image, density)
+
                 loss = criterion(logits, label)
 
                 loss.backward()
@@ -58,23 +63,34 @@ def main():
                 
                 train_loss += loss.item()
                 
+                preds = (torch.sigmoid(logits) > test_cfg.threshold).int().cpu().numpy()
+                all_preds.append(preds)
+                all_labels.append(label.cpu().numpy())
+
                 if idx % 100 == 0:
                     print_string = (f"\rEpoch: [{epoch + 1}/{cfg.num_epochs:>4d}] | Step: {idx:>5d}/{len(train_loader)} | " 
-                                    f"train_loss: {train_loss:>.4f}")
+                                    f"train_loss: {loss:>.4f}")
                     print(print_string, end='')
                 
-            # scheduler.step()
-            
             avg_loss = train_loss / len(train_loader)
+            precision = precision_score(all_labels, all_preds, average='micro')
+            recall = recall_score(all_labels, all_preds, average='micro')
+            f1 = f1_score(all_labels, all_preds, average='micro')
             
-            print('\n')
-            print(f'Epoch: [{epoch + 1}/{cfg.num_epochs:>5d}] | train_loss: {avg_loss:>.3f}')
+
+            print(f'\nEpoch: [{epoch + 1}/{cfg.num_epochs:>5d}] | train_loss: {avg_loss:>.3f} | '
+                  f"Precision: {precision*100:.2f}% | Recall: {recall*100:.2f}% | F1: {f1*100:.2f}%")
             
-            writer.add_scalar('optimization/Train Loss', avg_loss, global_step=epoch)
+            writer.add_scalar('optimization/train loss', avg_loss, global_step=epoch)
+            writer.add_scalar("Metric/train precision", precision, global_step=epoch)
+            writer.add_scalar("Metric/train recall", recall, global_step=epoch)
+            writer.add_scalar("Metric/train f1", f1, global_step=epoch)
+
             # 모델 저장 코드
-            if epoch % 10 == 0:
+            if epoch == 1: prev_f1 = f1
+            if epoch > 1 and f1 > prev_f1:
                 torch.save(model.state_dict(), cfg.model_dir / f"{cfg.model_name}_{cfg.date_name}" / f"{epoch}.pth")
-            
+                
 
     elif cfg.mode == 'test':
         test_cfg = TestConfig()
@@ -93,15 +109,19 @@ def main():
         
         all_labels = []
         all_preds = []
+        avg_valid_loss = 0
         for idx, (image, label, density) in enumerate(test_loader):
             image = image.to(cfg.device)
             label = label.to(cfg.device)
             density = density.to(cfg.device).unsqueeze(1)
             
             with torch.no_grad():
-                preds = model(image, density)
+                logits = model(image, density)
+                valid_loss = criterion(logits, label)
+            
+            avg_valid_loss += valid_loss
 
-            preds_prob = 1 / (1 + torch.exp(-preds))
+            preds_prob = 1 / (1 + torch.exp(-logits))
             preds = (preds_prob > test_cfg.threshold).int()
             
             # 평가: F1-score, Average Precision(mAP), Recall
@@ -110,7 +130,9 @@ def main():
             
             all_labels.append(y_true)
             all_preds.append(y_pred)
-            
+        
+        avg_valid_loss /= len(test_loader)
+
         y_true = torch.cat(all_labels).numpy()
         y_pred = torch.cat(all_preds).numpy()
         

@@ -10,11 +10,11 @@ now = datetime.now()
 
 @dataclass
 class TrainConfig:
-    mode: str        = 'test'
+    mode: str        = 'train'
     model_name: str  = 'resnet50'
     
     date_name        = now.strftime("%Y%m%d_%H%M%S")
-    data_dir: Path   = Path("/home/dev/DATASET/die_casting")
+    data_dir: Path   = Path("/content/drive/MyDrive/SEMINAR/DATASET/알루미늄 주조 공정 데이터/학습 데이터셋")
     model_dir: Path  = BASE_DIR / "experiments" / "models" / f"{model_name}_{date_name}"
     log_dir: Path    = BASE_DIR / "experiments" / "logs" / f"{model_name}_{date_name}"
     
