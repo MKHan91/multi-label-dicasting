@@ -1,13 +1,13 @@
 import torch
 import torch.nn as nn
-import torchvision.models as models
+from registry import MODEL_REGISTRY
 
 
 class MultiLabelwithDensity(nn.Module):
-    def __init__(self, num_classes=3):
+    def __init__(self, cfg, num_classes=3):
         super().__init__()
-        
-        base = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
+
+        base = MODEL_REGISTRY[cfg]
         self.backbone = nn.Sequential(*list(base.children())[:-1]) # Full Connected layer 전까지
         in_features = base.fc.in_features
         

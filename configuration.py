@@ -1,35 +1,55 @@
-from dataclasses import dataclass
+import os
+from dataclasses import dataclass, field
 from datetime import datetime
 import os.path as osp
 from pathlib import Path
 
 
-BASE_DIR = Path(__file__).resolve().parent
+label_map = {
+    "Normal": [0, 0, 0],
+    "P"     : [1, 0, 0],
+    "S"     : [0, 1, 0],
+    "PS"    : [1, 1, 0],
+    "IMC"   : [0, 0, 1],
+}
 
+BASE_DIR = Path(__file__).resolve().parent
 now = datetime.now()
 
+
+@dataclass
+class BaseConfig:
+    mode: str        = 'train'
+    device: str      = 'cuda'
+    
+
+@dataclass
+class DataConfig:
+    label_csv_name: str     = 'diecasting_w_imc'
+    label_list_w_imc: list[str]   = field(default_factory=['P', 'S', 'IMC'])
+    label_list_wo_imc: list[str]   = field(default_factory=['P', 'S'])
+    data_dir: Path   = Path(osp.join(osp.dirname(os.getcwd()), "dataset"))
+    
+    
 @dataclass
 class TrainConfig:
-    mode: str        = 'train'
-    model_name: str  = 'resnet50'
+    train_model_name: str  = 'v1115_v1'
     
-    date_name        = now.strftime("%Y%m%d_%H%M%S")
-    data_dir: Path   = Path("/content/drive/MyDrive/SEMINAR/DATASET/die_casting")
-    model_dir: Path  = BASE_DIR / "experiments" / "models" / f"{model_name}_{date_name}"
-    log_dir: Path    = BASE_DIR / "experiments" / "logs" / f"{model_name}_{date_name}"
+    model_dir: Path  = BASE_DIR / "experiments" / "models" / f"{train_model_name}"
+    log_dir: Path    = BASE_DIR / "experiments" / "logs" / f"{train_model_name}"
     
     num_epochs: int  = 100
     batch_size: int  = 16
     workers: int     = 8
     lr: float        = 1e-4
+    
     num_classes: int = 3
-    device: str      = 'cuda'
     
 
 @dataclass
 class TestConfig:
     test_model_name: str  = 'resnet50_20250914_100846'
-    test_model_dir : str  =  BASE_DIR / "experiments" / "models" / f"{test_model_name}"
-    test_results_dir: str = BASE_DIR / "experiments" / "results" / f"{test_model_name}"
+    model_dir : str  =  BASE_DIR / "experiments" / "models" / f"{test_model_name}"
+    results_dir: str = BASE_DIR / "experiments" / "results" / f"{test_model_name}"
     
     threshold: float      = 0.5
