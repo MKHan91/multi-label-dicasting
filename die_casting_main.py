@@ -15,7 +15,7 @@ from sklearn.metrics import f1_score, recall_score, precision_score
 # from torch.optim.lr_scheduler import CosineAnnealingLR
 
 
-def train(cfg: BaseConfig, train_cfg: TrainConfig):
+def train():
     writer = SummaryWriter(train_cfg.log_dir)
     
     # 폴더 존재 점검
@@ -49,7 +49,6 @@ def train(cfg: BaseConfig, train_cfg: TrainConfig):
         all_preds = []
         all_labels = []
         prev_f1 = 0.
-        elapsed_time = 0.
         for idx, (image, label, density) in enumerate(train_loader):
             start = time.time()
 
@@ -67,66 +66,67 @@ def train(cfg: BaseConfig, train_cfg: TrainConfig):
             
             train_loss += loss.item()
             
-            preds = (torch.sigmoid(logits) > cfg.threshold).int().cpu().numpy()
-            all_preds.append(preds)
-            all_labels.append(label)
             
-            end = time.time()
-            elapsed_time += (end - start)
+            # preds = (torch.sigmoid(logits) > cfg.threshold).int().cpu().numpy()
+            # all_preds.append(preds)
+            # all_labels.append(label)
+            elapsed_time = (time.time() - start)
             if idx % 100 == 0:
                 print_string = (f"Epoch: [{epoch + 1}/{cfg.num_epochs:>4d}] | Step: {idx:>5d}/{steps_per_epoch} | " 
-                                f"Elapsed time: {elapsed_time/60:.3f}min | train_loss: {loss:>.4f}")
+                                f"Elapsed time: {elapsed_time:.3f}sec | train_loss: {loss:>.4f}")
                 print(print_string)
-                elapsed_time = 0.
 
         avg_loss = train_loss / steps_per_epoch
-
-        all_labels = torch.cat(all_labels).numpy()
-        all_preds = torch.cat(all_preds).numpy()
+        # all_labels = torch.cat(all_labels).numpy()
+        # all_preds = torch.cat(all_preds).numpy()
 
         precision = precision_score(all_labels, all_preds, average='micro')
         recall = recall_score(all_labels, all_preds, average='micro')
         f1 = f1_score(all_labels, all_preds, average='micro')
-        
 
+        test_f1, test_precision, test_recall = test(model, loss_fn=criterion)
         print(f'\nEpoch: [{epoch + 1}/{cfg.num_epochs:>5d}] | train_loss: {avg_loss:>.3f} | '
-                f"Precision: {precision*100:.2f}% | Recall: {recall*100:.2f}% | F1: {f1*100:.2f}%")
+              f"Precision: {precision*100:.2f}% | Recall: {recall*100:.2f}% | F1: {f1*100:.2f}%")
         
         writer.add_scalar('optimization/train loss', avg_loss, global_step=epoch)
         writer.add_scalar("Metric/train precision", precision, global_step=epoch)
         writer.add_scalar("Metric/train recall", recall, global_step=epoch)
         writer.add_scalar("Metric/train f1", f1, global_step=epoch)
+        writer.add_scalar("Metric/test precision", test_precision, global_step=epoch)
+        writer.add_scalar("Metric/test recall", test_recall, global_step=epoch)
+        writer.add_scalar("Metric/test f1", test_f1, global_step=epoch)
 
         # 모델 저장 코드
-        if epoch == 1: prev_f1 = f1
-        if epoch > 1 and f1 > prev_f1:
-            torch.save(model.state_dict(), cfg.model_dir / f"{cfg.model_name}_{cfg.date_name}" / f"{epoch}.pth")
+        if epoch == 1: prev_f1 = test_f1
+        if epoch > 1 and test_f1 > prev_f1:
+            torch.save(model.state_dict(), test_cfg.save_dir / f"{test_cfg.test_model_name}_{epoch}.pth")
             
 
-def test(test_cfg: TestConfig, cfg: TrainConfig, model):
+def test(model, loss_fn):
     os.makedirs(test_cfg.test_results_dir, exist_ok=True)
     
-    dataset = diecastingDataset(cfg.data_dir, mode='test')
-    test_loader  = DataLoader(dataset, 
-                                shuffle=True, 
-                                batch_size=cfg.batch_size, 
-                                pin_memory=True, 
-                                num_workers=cfg.workers)
+    dataset = diecastingDataset(cfg, mode='test')
+    test_loader = DataLoader(dataset, 
+                             shuffle=True, 
+                             batch_size=cfg.batch_size, 
+                             pin_memory=True, 
+                             num_workers=cfg.workers)
+    if test_cfg.do_infer:
+        model.load_state_dict(torch.load(osp.join(test_cfg.test_model_dir/f"{99}.pth"), map_location="cuda"))
     
-    model.load_state_dict(torch.load(osp.join(test_cfg.test_model_dir/f"{99}.pth"), map_location="cuda"))
     model.eval()
     
     all_labels = []
     all_preds = []
     avg_valid_loss = 0
-    for idx, (image, label, density) in enumerate(test_loader):
+    for image, label, density in test_loader:
         image = image.to(cfg.device)
         label = label.to(cfg.device)
         density = density.to(cfg.device).unsqueeze(1)
         
         with torch.no_grad():
             logits = model(image, density)
-            valid_loss = criterion(logits, label)
+            valid_loss = loss_fn(logits, label)
         
         avg_valid_loss += valid_loss
 
@@ -149,20 +149,23 @@ def test(test_cfg: TestConfig, cfg: TrainConfig, model):
     recall = recall_score(y_true, y_pred, average="micro")
     precision = precision_score(y_true, y_pred, average="micro") 
     
-    print_string = f"f1: {f1*100:>.2f}% | recall: {recall*100:>.2f}% | precision: {precision*100:>.2f}%"
-    print(print_string)
+    return f1, precision, recall
+
+    # print_string = f"f1: {f1*100:>.2f}% | recall: {recall*100:>.2f}% | precision: {precision*100:>.2f}%"
+    # print(print_string)
         
 def main():    
-    cfg         = BaseConfig()
-    train_cfg   = TrainConfig()
-    test_cfg    = TestConfig()
     
     if cfg.model == 'train':
         train(cfg)
     
     elif cfg.model == 'test':
-        test(test_cfg, cfg)
+        test(test_cfg)
     
     
 if __name__ == "__main__":
+    cfg         = BaseConfig()
+    train_cfg   = TrainConfig()
+    test_cfg    = TestConfig()
+    
     main()

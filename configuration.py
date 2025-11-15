@@ -48,8 +48,11 @@ class TrainConfig:
 
 @dataclass
 class TestConfig:
+    do_infer: bool = False
+    
     test_model_name: str  = 'resnet50_20250914_100846'
     model_dir : str  =  BASE_DIR / "experiments" / "models" / f"{test_model_name}"
     results_dir: str = BASE_DIR / "experiments" / "results" / f"{test_model_name}"
     
     threshold: float      = 0.5
+    save_dir: str   = Path("")
