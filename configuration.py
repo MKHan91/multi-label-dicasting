@@ -35,11 +35,12 @@ class DataConfig:
     
 @dataclass
 class TrainConfig:
-    arch_name: str         = "resnet50"
-    train_model_name: str  = 'v1115_v1'
+    arch_name: str         = "resnet101"
+    train_model_name: str  = f'v2_{arch_name}_v1.1.0'
     
     model_dir: Path  = BASE_DIR / "experiments" / "models" / f"{train_model_name}"
     log_dir: Path    = BASE_DIR / "experiments" / "logs" / f"{train_model_name}"
+    code_dir: Path   = BASE_DIR / "experiments" / "codes" / f"{train_model_name}"
     
     num_epochs: int  = 100
     batch_size: int  = 16
@@ -52,11 +53,8 @@ class TrainConfig:
 
 @dataclass
 class TestConfig:
-    do_infer: bool = False
+    model_name: str  = 'v2_resnet50_v1.0.0'
     
-    test_model_name: str  = 'v1115_v1'
-    model_dir : str  =  BASE_DIR / "experiments" / "models" / f"{test_model_name}"
-    results_dir: str = BASE_DIR / "experiments" / "results" / f"{test_model_name}"
-    
-    threshold: float      = 0.5
-    save_dir: str   = Path("")
+    threshold: float = 0.5
+    batch_size: int = 16
+    workers: int = 8

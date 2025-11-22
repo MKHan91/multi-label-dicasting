@@ -37,12 +37,13 @@ class DatasetPreprocess:
 
 
 class diecastingDataset(Dataset):
-    def __init__(self, data_cfg):
-        preproceessor  = DatasetPreprocess(data_cfg)
+    def __init__(self, data_cfg, mode='train'):
+        preproceessor  = DatasetPreprocess(data_cfg, mode)
         self.image_paths = preproceessor.image_paths
         self.labels      = preproceessor.labels
         self.densities   = preproceessor.densities
         
+        self.mode        = mode
         
     def __len__(self):
         return len(self.image_paths)

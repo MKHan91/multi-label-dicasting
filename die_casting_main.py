@@ -8,6 +8,7 @@ from torch.utils.tensorboard import SummaryWriter
 from torch.utils.data import DataLoader
 from configuration import BaseConfig, DataConfig, TrainConfig, TestConfig
 
+import shutil
 import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
@@ -56,9 +57,8 @@ def train():
         metric_f1.reset()
         metric_train_loss.reset()
         
-        # train_loss = torch.tensor(0., dtype=torch.float32, device=device)
         prev_f1 = torch.tensor(0., dtype=torch.float32, device=device)
-        for idx, (image, label, density) in enumerate(train_loader):
+        for step, (image, label, density) in enumerate(train_loader):
             start = time.time()
 
             optimizer.zero_grad()
@@ -82,8 +82,8 @@ def train():
             metric_f1.update(preds, label)
 
             elapsed_time = (time.time() - start)
-            if idx % 100 == 0:
-                print_string = (f"Epoch: [{epoch + 1}/{train_cfg.num_epochs:>4d}] | Step: {idx:>5d}/{steps_per_epoch} | " 
+            if step % 100 == 0:
+                print_string = (f"Epoch: [{epoch + 1}/{train_cfg.num_epochs:>4d}] | Step: {step:>5d}/{steps_per_epoch} | " 
                                 f"Elapsed time: {elapsed_time:.3f}sec | train_loss: {loss:>.4f}")
                 print(print_string)
 
@@ -92,8 +92,8 @@ def train():
         train_precision = metric_precision.compute()
         train_f1 = metric_f1.compute()
         
-        test_loss, test_f1, test_precision, test_recall = test(model, loss_fn=criterion)
-        print(f'\nEpoch: [{epoch + 1}/{cfg.num_epochs:>5d}] | test_loss: {test_loss:>.3f} | '
+        test_loss, test_f1, test_precision, test_recall = test(model)
+        print(f'\nEpoch: [{epoch + 1}/{train_cfg.num_epochs:>5d}] | test_loss: {test_loss:>.3f} | '
               f"Test Precision: {test_precision*100:.2f}% | Test Recall: {test_recall*100:.2f}% | Test F1: {test_f1*100:.2f}%")
         
         writer.add_scalar('optimization/train loss', avg_train_loss, global_step=epoch)
@@ -107,28 +107,26 @@ def train():
         # 모델 저장 코드
         if epoch == 1: prev_f1 = test_f1
         if epoch > 1 and test_f1 > prev_f1:
-            torch.save(model.state_dict(), test_cfg.save_dir / f"{test_cfg.test_model_name}_{epoch}.pth")
+            torch.save(model.state_dict(), train_cfg.model_dir / f"{train_cfg.train_model_name}_{epoch}.pth")
             
 
-def test(model, loss_fn):
-    os.makedirs(test_cfg.test_results_dir, exist_ok=True)
-    
+def test(model):
     dataset = diecastingDataset(data_cfg, mode='test')
     test_loader = DataLoader(dataset, 
                              shuffle=True, 
-                             batch_size=cfg.batch_size, 
+                             batch_size=test_cfg.batch_size, 
                              pin_memory=True, 
-                             num_workers=cfg.workers)
-    if test_cfg.do_infer:
-        model.load_state_dict(torch.load(osp.join(test_cfg.test_model_dir/f"{99}.pth"), map_location="cuda"))
-    
+                             num_workers=test_cfg.workers)
     model.eval()
     
+    criterion = nn.BCEWithLogitsLoss()
+
     metric_recall = MultilabelRecall(num_labels=len(data_cfg.label_list), average='micro').to(device)
     metric_precision = MultilabelPrecision(num_labels=len(data_cfg.label_list), average='micro').to(device)
     metric_f1 = MultilabelF1Score(num_labels=len(data_cfg.label_list), average='micro').to(device)
     metric_test_loss = MeanMetric().to(device)
     
+    print('------------------------ Start test ------------------------')
     for image, label, density in test_loader:
         image = image.to(device)
         label = label.to(device)
@@ -136,7 +134,7 @@ def test(model, loss_fn):
         
         with torch.no_grad():
             logits = model(image, density)
-            test_loss = loss_fn(logits, label)
+            test_loss = criterion(logits, label)
 
         preds_prob = 1 / (1 + torch.exp(-logits))
         preds = (preds_prob > test_cfg.threshold).int()
@@ -158,12 +156,20 @@ def test(model, loss_fn):
     
     return test_loss, f1, precision, recall
 
-def main():    
+def main():
+    os.makedirs(train_cfg.code_dir, exist_ok=True)
+    shutil.copy(osp.join(os.getcwd(), "configuration.py"),
+                train_cfg.code_dir)
+    
     if cfg.mode == 'train':
         train()
     
     elif cfg.mode == 'test':
-        test()
+        model = MultiLabelwithDensity(train_cfg, num_classes=train_cfg.num_classes)
+        model = model.to(device)
+        model.load_state_dict(torch.load(train_cfg.model_dir / f"{test_cfg.model_name}.pth", map_location=device))
+    
+        test(model)
     
     
 if __name__ == "__main__":
