@@ -11,41 +11,37 @@ from torch.utils.data import Dataset
 from torchvision.transforms import functional as F
 from PIL import Image
 
-from configuration import DataConfig
-
 
 class DatasetPreprocess:
-    def __init__(self, base_cfg):
-        self.data_cfg = DataConfig()
-        
+    def __init__(self, data_cfg, mode='train'):
         self.image_paths = []
-        for folder_name in sorted(os.listdir(osp.join(self.data_cfg.data_dir, base_cfg.mode))):
-            if not osp.isdir(osp.join(self.data_cfg.data_dir, base_cfg.mode, folder_name)): continue
+        self.data_cfg = data_cfg
+        
+        for folder_name in sorted(os.listdir(osp.join(data_cfg.data_dir, mode))):
+            if not osp.isdir(osp.join(data_cfg.data_dir, mode, folder_name)): continue
             
-            image_paths = glob(osp.join(self.data_cfg.data_dir, base_cfg.mode, folder_name, "*.jpg"))
+            image_paths = glob(osp.join(data_cfg.data_dir, mode, folder_name, "*.jpg"))
             self.image_paths.extend(image_paths)
             
-        csv_path = osp.join(self.data_cfg.data_dir, f'{self.data_cfg.label_csv_name}.csv')
+        csv_path = osp.join(data_cfg.data_dir, mode, f'{data_cfg.label_csv_name}.csv')
         self.labels, self.densities = self.read_label_csv(csv_path)
     
     
     def read_label_csv(self, csv_path: str):
         label_csv = pd.read_csv(csv_path)
         
-        train_labels = label_csv[self.data_cfg.label_list_w_imc].values.astype(np.float32)
+        train_labels = label_csv[self.data_cfg.label_list].values.astype(np.float32)
         train_densities = label_csv['density'].values.astype(np.float32)
         
         return train_labels, train_densities
 
 
 class diecastingDataset(Dataset):
-    def __init__(self, cfg, mode='train'):
-        preproceessor  = DatasetPreprocess(cfg)
-        
+    def __init__(self, data_cfg):
+        preproceessor  = DatasetPreprocess(data_cfg)
         self.image_paths = preproceessor.image_paths
         self.labels      = preproceessor.labels
         self.densities   = preproceessor.densities
-        self.mode        = mode
         
         
     def __len__(self):

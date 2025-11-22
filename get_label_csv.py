@@ -1,21 +1,16 @@
 import os
 import os.path as osp
 import pandas as pd
+from configuration import DataConfig as data_cfg
+from configuration import BaseConfig as cfg
 
-# multi-hot encoding
-# PS, P, S, N, IMC
-# N: [0, 0, 0]
-# P: [0, 0, 1]
-# S: [0, 1, 0]
-# PS: [0, 1, 1]
-# IMC: [1, 0, 0]
 
 label_map = {
     "Normal": [0, 0, 0],
-    "P":   [0, 0, 1],
-    "S":   [0, 1, 0],
-    "PS":  [0, 1, 1],
-    "IMC": [1, 0, 0],
+    "P"     : [1, 0, 0],
+    "S"     : [0, 1, 0],
+    "PS"    : [1, 1, 0],
+    "IMC"   : [0, 0, 1],
 }
 
 density_map = {
@@ -27,7 +22,7 @@ density_map = {
     
 }
 # 데이터 경로
-base_dir = "/content/drive/MyDrive/SEMINAR/DATASET/die_casting"
+base_dir = "/home/dev/multi-label-dicasting/dataset"
 data_dir = osp.join(base_dir, "train")
 
 classes = sorted(os.listdir(data_dir))
@@ -49,16 +44,14 @@ for class_idx, class_name in enumerate(classes):
         img_labels.append(
             {"fileName": image_name,
              "label": class_name,
-             "label_P": vector[2],
-             "label_S": vector[1],
-             "label_IMC": vector[0],
+             "P": vector[2],
+             "S": vector[1],
+             "IMC": vector[0],
              "density": density
              }
             
         )
 
-
 df = pd.DataFrame(img_labels)
-df.to_csv(osp.join(base_dir, "labels.csv"), index=False)
-# df.to_csv("./labels.csv", index=False)
+df.to_csv(osp.join(base_dir, cfg.mode, f"{data_cfg.label_csv_name}.csv"), index=False)
 print('저장 완료')
