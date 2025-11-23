@@ -48,7 +48,7 @@ def train():
     
     
     steps_per_epoch = len(train_loader)
-    total_steps = steps_per_epoch * train_cfg.num_epochs
+    # total_steps = steps_per_epoch * train_cfg.num_epochs
     for epoch in range(train_cfg.num_epochs):
         model.train()
         
