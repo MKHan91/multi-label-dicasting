@@ -23,7 +23,7 @@ density_map = {
 }
 # 데이터 경로
 base_dir = "/home/dev/multi-label-dicasting/dataset"
-data_dir = osp.join(base_dir, "train")
+data_dir = osp.join(base_dir, cfg.mode)
 
 classes = sorted(os.listdir(data_dir))
 print(f'분류 클래스: {classes}')

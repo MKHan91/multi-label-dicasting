@@ -35,14 +35,14 @@ class DataConfig:
     
 @dataclass
 class TrainConfig:
-    arch_name: str         = "resnet101"
-    train_model_name: str  = f'v2_{arch_name}_v1.1.0'
+    arch_name: str         = "resnet50"
+    train_model_name: str  = f'v2_{arch_name}_v1.1.4'
     
     model_dir: Path  = BASE_DIR / "experiments" / "models" / f"{train_model_name}"
     log_dir: Path    = BASE_DIR / "experiments" / "logs" / f"{train_model_name}"
     code_dir: Path   = BASE_DIR / "experiments" / "codes" / f"{train_model_name}"
     
-    num_epochs: int  = 100
+    num_epochs: int  = 80
     batch_size: int  = 16
     workers: int     = 8
     lr: float        = 1e-4
