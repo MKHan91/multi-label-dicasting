@@ -178,11 +178,12 @@ def main():
         train()
     
     elif cfg.mode == 'test':
-        model = MultiLabelwithDensity(train_cfg, num_classes=train_cfg.num_classes)
+        model = MultiLabelwithDensity(test_cfg, num_classes=train_cfg.num_classes)
         model = model.to(device)
         model.load_state_dict(torch.load(test_cfg.model_dir / f"{test_cfg.model_name}_{test_cfg.epoch}.pth", map_location=device))
     
         df = test(model)
+        df.to_csv(test_cfg.log_dir / f"{test_cfg.model_name}.csv")
         print(df)
     
     

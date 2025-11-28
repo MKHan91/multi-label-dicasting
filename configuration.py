@@ -52,9 +52,11 @@ class TrainConfig:
 
 @dataclass
 class TestConfig:
-    model_name: str  = 'v2_resnet50_v1.0.0'
+    arch_name: str   = "resnet50"
+    model_name: str  = f'v2_{arch_name}_v1.1.1'
     
     model_dir: Path  = BASE_DIR / "experiments" / "models" / f"{model_name}"
+    log_dir: Path    = BASE_DIR / "experiments" / "logs" / f"{model_name}"
     
     batch_size: int = 16
     epoch: int = 99
