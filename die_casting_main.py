@@ -7,7 +7,10 @@ from model.die_casting_model import MultiLabelwithDensity
 from torch.utils.tensorboard import SummaryWriter
 from torch.utils.data import DataLoader
 from configuration import BaseConfig, DataConfig, TrainConfig, TestConfig
+import utils
 
+
+import pandas as pd
 import shutil
 import matplotlib.pyplot as plt
 import torch
@@ -15,7 +18,6 @@ import torch.nn as nn
 from torchmetrics.classification import MultilabelF1Score, MultilabelPrecision, MultilabelRecall
 from torchmetrics import MeanMetric
 # from torch.optim.lr_scheduler import CosineAnnealingLR
-
 
 def train():
     writer = SummaryWriter(train_cfg.log_dir)
@@ -127,22 +129,29 @@ def test(model):
     metric_test_loss = MeanMetric().to(device)
     
     print('------------------------ Start test ------------------------')
-    for image, label, density in test_loader:
-        image = image.to(device)
-        label = label.to(device)
-        density = density.to(device).unsqueeze(1)
+    for test_image, test_label, test_density in test_loader:
+        test_image = test_image.to(device)
+        test_label = test_label.to(device)
+        test_density = test_density.to(device).unsqueeze(1)
         
         with torch.no_grad():
-            logits = model(image, density)
-            test_loss = criterion(logits, label)
+            logits = model(test_image, test_density)
+            test_loss = criterion(logits, test_label)
 
         preds_prob = 1 / (1 + torch.exp(-logits))
-        preds = (preds_prob > test_cfg.threshold).int()
+        preds = (preds_prob > test_cfg.threshold).type(torch.float32)
 
+        if cfg.mode == "test":
+            mislabel, mispred = utils.get_incorrection(test_label, preds)
+            mislabel_names = utils.label2str(data_cfg, src=mislabel)
+            mispred_names = utils.label2str(data_cfg, src=mispred)
+            
+            df = utils.count_mismatch(mislabel_names, mispred_names)
+            
         metric_test_loss.update(test_loss)
-        metric_recall.update(preds, label)
-        metric_precision.update(preds, label)
-        metric_f1.update(preds, label)
+        metric_recall.update(preds, test_label)
+        metric_precision.update(preds, test_label)
+        metric_f1.update(preds, test_label)
     
     recall      = metric_recall.compute().item()
     precision   = metric_precision.compute().item()
@@ -154,7 +163,11 @@ def test(model):
     metric_f1.reset()
     metric_recall.reset()
     
-    return test_loss, f1, precision, recall
+    if cfg.mode == 'test':
+        return df
+    else:
+        return test_loss, f1, precision, recall
+
 
 def main():
     os.makedirs(train_cfg.code_dir, exist_ok=True)
@@ -167,13 +180,25 @@ def main():
     elif cfg.mode == 'test':
         model = MultiLabelwithDensity(train_cfg, num_classes=train_cfg.num_classes)
         model = model.to(device)
-        model.load_state_dict(torch.load(train_cfg.model_dir / f"{test_cfg.model_name}.pth", map_location=device))
+        model.load_state_dict(torch.load(test_cfg.model_dir / f"{test_cfg.model_name}_{test_cfg.epoch}.pth", map_location=device))
     
-        test(model)
+        df = test(model)
+        print(df)
     
     
 if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    label_map = {
+        "Normal": [0, 0, 0],
+        "P"     : [1, 0, 0],
+        "S"     : [0, 1, 0],
+        "PS"    : [1, 1, 0],
+        "IMC"   : [0, 0, 1],
+    }
+    inv_label_map = {}
+    for key, value in label_map.items():
+        inv_label_map[str(value)] = key
 
     cfg         = BaseConfig()
     data_cfg    = DataConfig()

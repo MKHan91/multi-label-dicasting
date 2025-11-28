@@ -9,7 +9,7 @@ now = datetime.now()
 
 @dataclass
 class BaseConfig:
-    mode: bool  = 'train'
+    mode: bool  = 'test'
 
 
 @dataclass
@@ -21,17 +21,25 @@ class DataConfig:
             'S',
             "IMC"
         ])
-    data_dir: Path   = Path(osp.join(os.getcwd(), "dataset"))
+    bit_labels: dict[str, str] = field(
+        default_factory=lambda: {
+        "0": "Normal",
+        "4": "P",
+        "2": "S",
+        "6": "PS",
+        "1": "IMC"
+        })
     
+    data_dir: Path   = Path(osp.join(os.getcwd(), "dataset"))
     
 @dataclass
 class TrainConfig:
-    arch_name: str         = "resnet101"
-    train_model_name: str  = f'v2_{arch_name}_v1.1.0'
+    arch_name: str   = "resnet50"
+    model_name: str  = f'v2_{arch_name}_v1.1.1'
     
-    model_dir: Path  = BASE_DIR / "experiments" / "models" / f"{train_model_name}"
-    log_dir: Path    = BASE_DIR / "experiments" / "logs" / f"{train_model_name}"
-    code_dir: Path   = BASE_DIR / "experiments" / "codes" / f"{train_model_name}"
+    model_dir: Path  = BASE_DIR / "experiments" / "models" / f"{model_name}"
+    log_dir: Path    = BASE_DIR / "experiments" / "logs" / f"{model_name}"
+    code_dir: Path   = BASE_DIR / "experiments" / "codes" / f"{model_name}"
     
     num_epochs: int  = 100
     batch_size: int  = 16
@@ -46,6 +54,9 @@ class TrainConfig:
 class TestConfig:
     model_name: str  = 'v2_resnet50_v1.0.0'
     
-    threshold: float = 0.5
+    model_dir: Path  = BASE_DIR / "experiments" / "models" / f"{model_name}"
+    
     batch_size: int = 16
+    epoch: int = 99
+    threshold: float = 0.5
     workers: int = 8
