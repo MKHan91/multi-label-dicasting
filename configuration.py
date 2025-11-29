@@ -34,7 +34,7 @@ class DataConfig:
     
 @dataclass
 class TrainConfig:
-    arch_name: str   = "resnet50"
+    arch_name: str   = "resnet101"
     model_name: str  = f'v2_{arch_name}_v1.1.1'
     
     model_dir: Path  = BASE_DIR / "experiments" / "models" / f"{model_name}"

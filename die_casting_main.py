@@ -109,7 +109,7 @@ def train():
         # 모델 저장 코드
         if epoch == 1: prev_f1 = test_f1
         if epoch > 1 and test_f1 > prev_f1:
-            torch.save(model.state_dict(), train_cfg.model_dir / f"{train_cfg.train_model_name}_{epoch}.pth")
+            torch.save(model.state_dict(), train_cfg.model_dir / f"{train_cfg.model_name}_{epoch}.pth")
             
 
 def test(model):
@@ -142,7 +142,7 @@ def test(model):
         preds = (preds_prob > test_cfg.threshold).type(torch.float32)
 
         if cfg.mode == "test":
-            mislabel, mispred = utils.get_incorrection(test_label, preds)
+            mislabel, mispred = utils.get_mismatch(test_label, preds)
             mislabel_names = utils.label2str(data_cfg, src=mislabel)
             mispred_names = utils.label2str(data_cfg, src=mispred)
             
@@ -152,6 +152,9 @@ def test(model):
         metric_recall.update(preds, test_label)
         metric_precision.update(preds, test_label)
         metric_f1.update(preds, test_label)
+    
+    if cfg.mode == 'test':
+        return df
     
     recall      = metric_recall.compute().item()
     precision   = metric_precision.compute().item()
@@ -163,10 +166,7 @@ def test(model):
     metric_f1.reset()
     metric_recall.reset()
     
-    if cfg.mode == 'test':
-        return df
-    else:
-        return test_loss, f1, precision, recall
+    return test_loss, f1, precision, recall
 
 
 def main():
@@ -189,17 +189,6 @@ def main():
     
 if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-    label_map = {
-        "Normal": [0, 0, 0],
-        "P"     : [1, 0, 0],
-        "S"     : [0, 1, 0],
-        "PS"    : [1, 1, 0],
-        "IMC"   : [0, 0, 1],
-    }
-    inv_label_map = {}
-    for key, value in label_map.items():
-        inv_label_map[str(value)] = key
 
     cfg         = BaseConfig()
     data_cfg    = DataConfig()

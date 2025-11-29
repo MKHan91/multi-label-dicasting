@@ -20,7 +20,8 @@ def label2str(cfg, src):
     
     return names
 
-def get_incorrection(labels, preds):
+
+def get_mismatch(labels, preds):
     comp: bool = torch.all(labels == preds, axis=1)
     mislabel = labels[~comp]
     mispred = preds[~comp]
