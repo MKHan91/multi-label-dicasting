@@ -9,7 +9,7 @@ now = datetime.now()
 
 @dataclass
 class BaseConfig:
-    mode: bool  = 'test'
+    mode: bool  = 'train'
 
 
 @dataclass

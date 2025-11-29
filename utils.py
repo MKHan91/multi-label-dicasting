@@ -13,8 +13,8 @@ miscount = {
 
 def label2str(cfg, src):
     bits = 2 ** torch.arange(src.size(1)-1, -1, -1, device=src.device)
-    decimals = (src * bits).sum(dim=1).to(torch.float32)
-    decimals = decimals.cpu().numpy().astype(np.uint8)
+    decimals = (src * bits).sum(dim=1).to(torch.uint8)
+    decimals = decimals.cpu().numpy()
     decimals = decimals.astype(str)
     names = [cfg.bit_labels[item] for item in decimals]
     
@@ -29,7 +29,7 @@ def get_mismatch(labels, preds):
     return mislabel, mispred
 
 
-def count_mismatch(label_names, pred_names):
+def get_confusion_matrix(label_names, pred_names):
     for label_name, pred_name in zip(label_names, pred_names):
         miscount[label_name][pred_name] += 1
     
