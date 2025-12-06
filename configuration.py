@@ -9,7 +9,7 @@ now = datetime.now()
 
 @dataclass
 class BaseConfig:
-    mode: bool  = 'train'
+    mode: bool  = 'test'
 
 
 @dataclass
@@ -27,7 +27,10 @@ class DataConfig:
         "4": "P",
         "2": "S",
         "6": "PS",
-        "1": "IMC"
+        "1": "IMC",
+        "3": "S_IMC",
+        "5": "P_IMC",
+        "7": "PS_IMC",
         })
     
     data_dir: Path   = Path(osp.join(os.getcwd(), "dataset"))
@@ -52,7 +55,7 @@ class TrainConfig:
 
 @dataclass
 class TestConfig:
-    arch_name: str   = "resnet50"
+    arch_name: str   = "resnet101"
     model_name: str  = f'v2_{arch_name}_v1.1.1'
     
     model_dir: Path  = BASE_DIR / "experiments" / "models" / f"{model_name}"
@@ -62,3 +65,5 @@ class TestConfig:
     epoch: int = 99
     threshold: float = 0.5
     workers: int = 8
+    
+    mispred_detail: str = 'IMC'

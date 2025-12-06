@@ -4,11 +4,12 @@ import pandas as pd
 
 
 miscount = {
-    "Normal": {"Normal":0, "P": 0, "S": 0, "PS": 0, "IMC": 0},
-    "P": {"Normal":0, "P": 0, "S": 0, "PS": 0, "IMC": 0},
-    "S": {"Normal":0, "P": 0, "S": 0, "PS": 0, "IMC": 0},
-    "PS": {"Normal":0, "P": 0, "S": 0, "PS": 0, "IMC": 0},
-    "IMC": {"Normal":0, "P": 0, "S": 0, "PS": 0, "IMC": 0}
+    "Normal": {"Normal":0, "P": 0, "S": 0, "PS": 0, "IMC": 0, "S_IMC": 0, "P_IMC": 0, "PS_IMC": 0,},
+    "P": {"Normal":0, "P": 0, "S": 0, "PS": 0, "IMC": 0, "S_IMC": 0, "P_IMC": 0, "PS_IMC": 0,},
+    "S": {"Normal":0, "P": 0, "S": 0, "PS": 0, "IMC": 0, "S_IMC": 0, "P_IMC": 0, "PS_IMC": 0,},
+    "PS": {"Normal":0, "P": 0, "S": 0, "PS": 0, "IMC": 0, "S_IMC": 0, "P_IMC": 0, "PS_IMC": 0,},
+    "IMC": {"Normal":0, "P": 0, "S": 0, "PS": 0, "IMC": 0, "S_IMC": 0, "P_IMC": 0, "PS_IMC": 0,},
+    
 }
 
 def label2str(cfg, src):
@@ -17,6 +18,12 @@ def label2str(cfg, src):
     decimals = decimals.cpu().numpy()
     decimals = decimals.astype(str)
     names = [cfg.bit_labels[item] for item in decimals]
+    
+    # for idx, item in enumerate(decimals):
+    #     try:
+    #         cfg.bit_labels[item]
+    #     except KeyError:
+    #         print(idx)
     
     return names
 

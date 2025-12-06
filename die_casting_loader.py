@@ -51,6 +51,7 @@ class diecastingDataset(Dataset):
 
     def __getitem__(self, idx):
         image_path = self.image_paths[idx]
+        image_name = osp.split(image_path)[-1][:-4]
         image = Image.open(image_path).convert('RGB')
 
         # 데이터 증강
@@ -81,7 +82,7 @@ class diecastingDataset(Dataset):
         label   = self.labels[idx]
         densities = self.densities[idx]
         
-        return image, label, densities
+        return image, label, densities, image_name
 
 
     def get_labels(self):

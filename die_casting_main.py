@@ -132,7 +132,9 @@ def test(model):
 
     total_preds = torch.zeros(dataset.labels.shape, dtype=torch.uint8).cuda()
     total_labels = torch.zeros(dataset.labels.shape, dtype=torch.uint8).cuda()
-    for idx, (test_image, test_label, test_density) in enumerate(test_loader):
+    total_probs = torch.zeros(dataset.labels.shape, dtype=torch.float32).cuda()
+    total_test_names = []
+    for idx, (test_image, test_label, test_density, test_name) in enumerate(test_loader):
         test_image = test_image.to(device)
         test_label = test_label.to(device)
         test_density = test_density.to(device).unsqueeze(1)
@@ -145,14 +147,11 @@ def test(model):
         preds = (preds_prob > test_cfg.threshold).type(torch.uint8)
 
         if cfg.mode == "test":
-            # mislabel, mispred = utils.get_mismatch(test_label, preds)
-            # mislabel_names = utils.label2str(data_cfg, src=mislabel)
-            # mispred_names = utils.label2str(data_cfg, src=mispred)
-            
-            # df = utils.get_confusion_matrix(mislabel_names, mispred_names)
-            
+            total_probs[idx*test_cfg.batch_size: (idx+1)*test_cfg.batch_size] = preds_prob 
             total_preds[idx*test_cfg.batch_size: (idx+1)*test_cfg.batch_size] = preds
             total_labels[idx*test_cfg.batch_size: (idx+1)*test_cfg.batch_size] = test_label.type(torch.uint8)
+            total_test_names.append(test_name)
+            
             
         metric_test_loss.update(test_loss)
         metric_recall.update(preds, test_label)
@@ -163,7 +162,25 @@ def test(model):
         total_label_names = utils.label2str(data_cfg, src=total_labels)
         total_pred_names = utils.label2str(data_cfg, src=total_preds)
         total_df = utils.get_confusion_matrix(total_label_names, total_pred_names)
-        return total_df
+        
+        rows = []
+        
+        s_indices = [idx for idx, name in enumerate(total_label_names) if name == test_cfg.mispred_detail]
+        total_test_names = sum(total_test_names, [])
+        for s_idx in s_indices:
+            if total_pred_names[s_idx] != test_cfg.mispred_detail:
+                probs = [f"{sample * 100:.2f} %" for sample in total_probs[s_idx]]
+                rows.append({
+                    'Predicted': total_pred_names[s_idx],
+                    'Probabilities': probs,
+                    'ImageName': total_test_names[s_idx]
+                })
+                
+                print(f"Model Misprediction Details: {total_pred_names[s_idx]} | {probs} | {total_test_names[s_idx]}")
+        
+        mispred_detail_df = pd.DataFrame(rows, columns=['Predicted', 'Probabilities', 'ImageName'])
+        
+        return total_df, mispred_detail_df
     
     recall      = metric_recall.compute().item()
     precision   = metric_precision.compute().item()
@@ -191,9 +208,12 @@ def main():
         model = model.to(device)
         model.load_state_dict(torch.load(test_cfg.model_dir / f"{test_cfg.model_name}_{test_cfg.epoch}.pth", map_location=device))
     
-        total_df = test(model)
+        total_df, mispred_detail_df = test(model)
         total_df.to_csv(test_cfg.log_dir / f"{test_cfg.model_name}.csv")
+        mispred_detail_df.to_csv(test_cfg.log_dir / f"{test_cfg.model_name}_{test_cfg.mispred_detail}_mispred_details.csv")
+        
         print(total_df)
+        print(mispred_detail_df)
     
     
 if __name__ == "__main__":
