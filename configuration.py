@@ -9,7 +9,7 @@ now = datetime.now()
 
 @dataclass
 class BaseConfig:
-    mode: bool  = 'test'
+    mode: bool  = 'train'
 
 
 @dataclass
@@ -37,8 +37,8 @@ class DataConfig:
     
 @dataclass
 class TrainConfig:
-    arch_name: str   = "resnet101"
-    model_name: str  = f'v2_{arch_name}_v1.1.1'
+    arch_name: str   = "resnet50"
+    model_name: str  = f'v1_ad_{arch_name}_v1.0.0'
     
     model_dir: Path  = BASE_DIR / "experiments" / "models" / f"{model_name}"
     log_dir: Path    = BASE_DIR / "experiments" / "logs" / f"{model_name}"
@@ -55,7 +55,7 @@ class TrainConfig:
 
 @dataclass
 class TestConfig:
-    arch_name: str   = "resnet101"
+    arch_name: str   = "resnet50"
     model_name: str  = f'v2_{arch_name}_v1.1.1'
     
     model_dir: Path  = BASE_DIR / "experiments" / "models" / f"{model_name}"
@@ -66,4 +66,4 @@ class TestConfig:
     threshold: float = 0.5
     workers: int = 8
     
-    mispred_detail: str = 'IMC'
+    mispred_detail: str = 'Normal'

@@ -3,7 +3,7 @@ import os.path as osp
 import time
 
 from die_casting_loader import diecastingDataset
-from model.die_casting_model import MultiLabelwithDensity
+from model.die_casting_model import MultiLabelwithDensity, AnomalyDetector
 from torch.utils.tensorboard import SummaryWriter
 from torch.utils.data import DataLoader
 from configuration import BaseConfig, DataConfig, TrainConfig, TestConfig
@@ -27,7 +27,8 @@ def train():
     os.makedirs(train_cfg.log_dir, exist_ok=True)
     
     # 모델 정의
-    model = MultiLabelwithDensity(train_cfg, num_classes=train_cfg.num_classes)
+    # model = MultiLabelwithDensity(train_cfg, num_classes=train_cfg.num_classes)
+    model = AnomalyDetector(train_cfg)
     model = model.to(device)
     
     # 학습 데이터
@@ -60,7 +61,7 @@ def train():
         metric_train_loss.reset()
         
         prev_f1 = torch.tensor(0., dtype=torch.float32, device=device)
-        for step, (image, label, density) in enumerate(train_loader):
+        for step, (image, label, density, image_name) in enumerate(train_loader):
             start = time.time()
 
             optimizer.zero_grad()
@@ -69,7 +70,8 @@ def train():
             label = label.to(device)
             density = density.to(device).unsqueeze(1)
             
-            logits = model(image, density)
+            # logits = model(image, density)
+            logits = model(image)
 
             loss = criterion(logits, label)
             loss.backward()
