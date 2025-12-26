@@ -83,7 +83,7 @@ class diecastingDataset(Dataset):
         label   = self.labels[idx]
         densities = self.densities[idx]
         
-        return image, label, densities, image_name
+        return image, image_name
 
 
     def get_labels(self):

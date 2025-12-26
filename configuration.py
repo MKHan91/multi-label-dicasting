@@ -45,12 +45,17 @@ class TrainConfig:
     code_dir: Path   = BASE_DIR / "experiments" / "codes" / f"{model_name}"
     
     num_epochs: int  = 100
-    batch_size: int  = 16
+    batch_size: int  = 8
     workers: int     = 8
     lr: float        = 1e-4
     
     num_classes: int = 3
     train_thld: float = 0.5
+    
+    @dataclass
+    class LossConfig:
+        ssim_weight: float = 0.85
+        l1_weight: float  = 0.15
     
 
 @dataclass
