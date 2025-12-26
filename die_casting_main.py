@@ -110,8 +110,8 @@ def test(model, loss_cfg):
     metric_test_loss = MeanMetric().to(device)
     
     print('------------------------ Start test ------------------------')
-    total_preds = torch.zeros(dataset.labels.shape, dtype=torch.uint8).cuda()
-    total_test_names = []
+    # total_preds = torch.zeros(dataset.labels.shape, dtype=torch.uint8).cuda()
+    # total_test_names = []
     ssim = losses.SSIM()
     ssim = ssim.to(device)
     
@@ -127,9 +127,9 @@ def test(model, loss_cfg):
             
             recon_loss = loss_cfg.ssim_weight * ssim_loss + loss_cfg.l1_weight * l1_loss
 
-        if cfg.mode == "test":
-            total_preds[idx*test_cfg.batch_size: (idx+1)*test_cfg.batch_size] = pred
-            total_test_names.append(test_name)
+        # if cfg.mode == "test":
+        #     total_preds[idx*test_cfg.batch_size: (idx+1)*test_cfg.batch_size] = pred
+        #     total_test_names.append(test_name)
             
         metric_test_loss.update(recon_loss)
     
