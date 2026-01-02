@@ -17,20 +17,26 @@ class DatasetPreprocess:
         self.image_paths = []
         self.data_cfg = data_cfg
         
-        for folder_name in sorted(os.listdir(osp.join(data_cfg.data_dir, mode))):
-            if folder_name != 'Normal': continue
-            if not osp.isdir(osp.join(data_cfg.data_dir, mode, folder_name)): continue
+        if mode == 'train':
+            self.image_paths = glob(osp.join(data_cfg.data_dir, mode, "Normal", "*.jpg"))
             
-            image_paths = glob(osp.join(data_cfg.data_dir, mode, folder_name, "*.jpg"))
-            self.image_paths.extend(image_paths)
-            
+        elif mode == 'test':
+            folder_dir = [
+                osp.join(data_cfg.data_dir, mode, "Normal"),
+                # osp.join(data_cfg.data_dir, mode, "P"),
+                # osp.join(data_cfg.data_dir, mode, "S")
+            ]
+            for dir in folder_dir:
+                self.image_paths.extend(glob(osp.join(dir, "*.jpg")))
+                
         csv_path = osp.join(data_cfg.data_dir, mode, f'{data_cfg.label_csv_name}.csv')
         self.labels, self.densities = self.read_label_csv(csv_path)
     
     
     def read_label_csv(self, csv_path: str):
         label_csv = pd.read_csv(csv_path)
-        
+        label_csv = label_csv[label_csv['label'].isin(['Normal', 'P', 'S'])]
+
         train_labels = label_csv[self.data_cfg.label_list].values.astype(np.float32)
         train_densities = label_csv['density'].values.astype(np.float32)
         
@@ -54,7 +60,8 @@ class diecastingDataset(Dataset):
         image_path = self.image_paths[idx]
         image_name = osp.split(image_path)[-1][:-4]
         image = Image.open(image_path).convert('RGB')
-
+        image = image.crop((0, 40, image.size[0], 235))
+        
         # 데이터 증강
         if self.mode=='train':
             data_transforms = transforms.Compose([
@@ -70,6 +77,7 @@ class diecastingDataset(Dataset):
             
             image = data_transforms(image)
         
+            return image, image_name
         
         elif self.mode=='test':
             data_transforms = transforms.Compose([
@@ -80,10 +88,11 @@ class diecastingDataset(Dataset):
             
             image = data_transforms(image)
 
-        label   = self.labels[idx]
-        densities = self.densities[idx]
+            label   = self.labels[idx]
+            densities = self.densities[idx]
+            
+            return image, label, image_name
         
-        return image, image_name
 
 
     def get_labels(self):

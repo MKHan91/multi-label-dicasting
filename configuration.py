@@ -38,36 +38,36 @@ class DataConfig:
 @dataclass
 class TrainConfig:
     arch_name: str   = "resnet50"
-    model_name: str  = f'v1_ad_{arch_name}_v1.0.0'
+    model_name: str  = f'v1_ad_{arch_name}_v1.1.7'
     
     model_dir: Path  = BASE_DIR / "experiments" / "models" / f"{model_name}"
     log_dir: Path    = BASE_DIR / "experiments" / "logs" / f"{model_name}"
     code_dir: Path   = BASE_DIR / "experiments" / "codes" / f"{model_name}"
     
-    num_epochs: int  = 100
+    num_epochs: int  = 1600
     batch_size: int  = 8
     workers: int     = 8
-    lr: float        = 1e-4
+    lr: float        = 3e-4
     
     num_classes: int = 3
     train_thld: float = 0.5
     
     @dataclass
     class LossConfig:
-        ssim_weight: float = 0.85
-        l1_weight: float  = 0.15
+        ssim_weight: float = 0.45
+        l1_weight: float  = 0.55
     
 
 @dataclass
 class TestConfig:
     arch_name: str   = "resnet50"
-    model_name: str  = f'v2_{arch_name}_v1.1.1'
+    model_name: str  = f'v1_ad_{arch_name}_v1.0.5'
     
     model_dir: Path  = BASE_DIR / "experiments" / "models" / f"{model_name}"
     log_dir: Path    = BASE_DIR / "experiments" / "logs" / f"{model_name}"
     
     batch_size: int = 16
-    epoch: int = 99
+    epoch: int = 790
     threshold: float = 0.5
     workers: int = 8
     

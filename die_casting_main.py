@@ -10,6 +10,7 @@ from configuration import BaseConfig, DataConfig, TrainConfig, TestConfig
 from losses import losses
 import utils
 
+import seaborn as sns
 import numpy as np
 import pandas as pd
 import shutil
@@ -18,8 +19,10 @@ import torch
 import torch.nn as nn
 from torchmetrics.classification import MultilabelF1Score, MultilabelPrecision, MultilabelRecall
 from torchmetrics import MeanMetric
-# from torch.optim.lr_scheduler import CosineAnnealingLR
+from torch.optim.lr_scheduler import CosineAnnealingLR
 
+
+# region - training
 def train():
     loss_cfg = train_cfg.LossConfig()
     writer = SummaryWriter(train_cfg.log_dir)
@@ -27,6 +30,8 @@ def train():
     # 폴더 존재 점검
     os.makedirs(train_cfg.model_dir, exist_ok=True)
     os.makedirs(train_cfg.log_dir, exist_ok=True)
+    os.makedirs(train_cfg.code_dir, exist_ok=True)
+    utils.backup_codes(train_cfg.code_dir)
     
     # 모델 정의
     model = AnomalyDetector(train_cfg)
@@ -44,7 +49,10 @@ def train():
     optimizer = torch.optim.Adam(model.parameters(), lr=train_cfg.lr)
     ssim = losses.SSIM()
     ssim = ssim.to(device)
-    # scheduler = CosineAnnealingLR(optimizer, T_max=cfg.num_epochs)
+    
+    poly_lambda = lambda epoch: (1 - epoch / train_cfg.num_epochs) ** 0.9
+    scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=poly_lambda)
+    # scheduler = CosineAnnealingLR(optimizer, T_max=train_cfg.num_epochs, eta_min=1e-6)
 
     metric_train_loss = MeanMetric().to(device)
     
@@ -78,6 +86,8 @@ def train():
                                 f"Elapsed time: {elapsed_time:.3f}sec | train_loss: {recon_loss:>.4f}")
                 print(print_string)
 
+        scheduler.step()
+        
         avg_train_loss = metric_train_loss.compute().item()
 
         dataset_size = len(train_loader.dataset)
@@ -85,8 +95,9 @@ def train():
         image_sample, _ = train_loader.dataset[random_indices.item()]
         train_recon_image = model(image_sample.unsqueeze(0).to(device))
         
-        test_loss, test_image_sample, test_recon_image = test(model, loss_cfg)
+        test_loss, test_image_sample, test_recon_image = evaluate(model, loss_cfg)
         
+        writer.add_scalar('optimization/learning_rate', optimizer.param_groups[0]['lr'], global_step=epoch)
         writer.add_scalar('optimization/train loss', avg_train_loss, global_step=epoch)
         writer.add_scalar('optimization/test loss', test_loss, global_step=epoch)
         writer.add_image('train_image/input', image_sample, global_step=epoch)
@@ -99,7 +110,8 @@ def train():
             torch.save(model.state_dict(), train_cfg.model_dir / f"{train_cfg.model_name}_{epoch}.pth")
             
 
-def test(model, loss_cfg):
+# region - evaluation
+def evaluate(model, loss_cfg):
     dataset = diecastingDataset(data_cfg, mode='test')
     test_loader = DataLoader(dataset, 
                              shuffle=True, 
@@ -115,7 +127,7 @@ def test(model, loss_cfg):
     ssim = losses.SSIM()
     ssim = ssim.to(device)
     
-    for idx, (test_image, test_name) in enumerate(test_loader):
+    for idx, (test_image, test_label, _) in enumerate(test_loader):
         test_image = test_image.to(device)
         
         with torch.no_grad():
@@ -137,32 +149,74 @@ def test(model, loss_cfg):
     
     dataset_size = len(test_loader.dataset)
     random_indices = np.random.choice(dataset_size, 1, replace=False)
-    test_image_sample, _ = test_loader.dataset[random_indices.item()]
+    test_image_sample, _, _ = test_loader.dataset[random_indices.item()]
     test_recon_image = model(test_image_sample.unsqueeze(0).to(device))
     
     return test_loss, test_image_sample, test_recon_image
 
 
-def main():
-    os.makedirs(train_cfg.code_dir, exist_ok=True)
-    shutil.copy(osp.join(os.getcwd(), "configuration.py"),
-                train_cfg.code_dir)
+# region - inference
+def inference(model):
+    "visualize latent space with t-SNE"
+    from sklearn.manifold import TSNE
     
+    dataset = diecastingDataset(data_cfg, mode='test')
+    test_loader = DataLoader(dataset, 
+                             shuffle=False, 
+                             batch_size=test_cfg.batch_size, 
+                             pin_memory=True, 
+                             num_workers=test_cfg.workers)
+    
+    print('Exracting latent features...')
+    latent_list = []
+    test_labels = []
+    with torch.no_grad():
+        for test_image, test_label, _ in test_loader:
+            test_image = test_image.to(device)
+            
+            latent = model.encoder(test_image)
+            # t-SNE 입력을 위한 2차원으로 압축
+            latent_flat = torch.mean(latent, dim=[2,3])  # (B, C, H, W) -> (B, C)
+            latent_list.append(latent_flat.cpu())
+            test_labels.append(test_label.cpu())
+            
+    all_latents = torch.cat(latent_list, dim=0).numpy()
+    all_labels  = torch.cat(test_labels, dim=0)
+    
+    all_labels_names = utils.label2str(data_cfg, all_labels)
+    
+    print('Applying t-SNE...')
+    tsne = TSNE(n_components=2, random_state=42)
+    latents_2d = tsne.fit_transform(all_latents)
+    
+    df = pd.DataFrame({
+        'x': latents_2d[:,0],
+        'y': latents_2d[:,1],
+        'label': all_labels_names
+    })
+    
+    plt.figure(figsize=(10, 7))
+    sns.scatterplot(data=df, x='x', y='y', hue='label', palette='tab10', alpha=0.7)
+    plt.title("t-SNE Visualization of Latent Space")
+    plt.legend()
+    plt.xlabel("feature 1")
+    plt.ylabel("feature 2")
+    plt.savefig('./Normal_P.png')
+    plt.close()
+    
+    print('done')
+    
+    
+def main():
     if cfg.mode == 'train':
         train()
     
-    # elif cfg.mode == 'test':
-    #     model = MultiLabelwithDensity(test_cfg, num_classes=train_cfg.num_classes)
-    #     model = model.to(device)
-    #     model.load_state_dict(torch.load(test_cfg.model_dir / f"{test_cfg.model_name}_{test_cfg.epoch}.pth", map_location=device))
-    
-    #     total_df, mispred_detail_df = test(model)
-    #     total_df.to_csv(test_cfg.log_dir / f"{test_cfg.model_name}.csv")
-    #     mispred_detail_df.to_csv(test_cfg.log_dir / f"{test_cfg.model_name}_{test_cfg.mispred_detail}_mispred_details.csv")
-        
-    #     print(total_df)
-    #     print(mispred_detail_df)
-    
+    elif cfg.mode == 'test':
+        model = AnomalyDetector(test_cfg)
+        model = model.to(device)
+        model.load_state_dict(torch.load(test_cfg.model_dir / f"{test_cfg.model_name}_{test_cfg.epoch}.pth", map_location=device))
+        inference(model)
+
     
 if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

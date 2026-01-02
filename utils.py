@@ -1,6 +1,8 @@
 import torch
 import numpy as np
 import pandas as pd
+import os
+import os.path as osp
 
 
 miscount = {
@@ -43,3 +45,17 @@ def get_confusion_matrix(label_names, pred_names):
     df = pd.DataFrame(miscount)
     
     return df
+
+def backup_codes(code_dir):
+    import shutil
+
+    for item in os.listdir(os.getcwd()):
+        if osp.isdir(osp.join(os.getcwd(), item)):
+            if item == 'experiments' or item == 'dataset': continue
+            
+            for item2 in os.listdir(osp.join(os.getcwd(), item)):
+                if item2.endswith('.py'):
+                    shutil.copy(osp.join(os.getcwd(), item, item2), code_dir)
+        else:
+            if item.endswith('.py'):
+                shutil.copy(osp.join(os.getcwd(), item), code_dir)
