@@ -38,7 +38,7 @@ class DataConfig:
 @dataclass
 class TrainConfig:
     arch_name: str   = "resnet50"
-    model_name: str  = f'v1_ad_{arch_name}_v1.1.7'
+    model_name: str  = f'v1_ad_{arch_name}_v1.2.0'
     
     model_dir: Path  = BASE_DIR / "experiments" / "models" / f"{model_name}"
     log_dir: Path    = BASE_DIR / "experiments" / "logs" / f"{model_name}"
@@ -61,7 +61,7 @@ class TrainConfig:
 @dataclass
 class TestConfig:
     arch_name: str   = "resnet50"
-    model_name: str  = f'v1_ad_{arch_name}_v1.0.5'
+    model_name: str  = f'v1_ad_{arch_name}_v1.1.1'
     
     model_dir: Path  = BASE_DIR / "experiments" / "models" / f"{model_name}"
     log_dir: Path    = BASE_DIR / "experiments" / "logs" / f"{model_name}"
