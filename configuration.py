@@ -9,7 +9,7 @@ now = datetime.now()
 
 @dataclass
 class BaseConfig:
-    mode: bool  = 'train'
+    mode: bool  = 'test'
 
 
 @dataclass
@@ -38,16 +38,16 @@ class DataConfig:
 @dataclass
 class TrainConfig:
     arch_name: str   = "resnet50"
-    model_name: str  = f'v1_ad_{arch_name}_v1.2.0'
+    model_name: str  = f'v1_ad_{arch_name}_v1.2.1'
     
     model_dir: Path  = BASE_DIR / "experiments" / "models" / f"{model_name}"
     log_dir: Path    = BASE_DIR / "experiments" / "logs" / f"{model_name}"
     code_dir: Path   = BASE_DIR / "experiments" / "codes" / f"{model_name}"
     
-    num_epochs: int  = 1600
+    num_epochs: int  = 400
     batch_size: int  = 8
     workers: int     = 8
-    lr: float        = 3e-4
+    lr: float        = 1e-4
     
     num_classes: int = 3
     train_thld: float = 0.5
@@ -61,13 +61,13 @@ class TrainConfig:
 @dataclass
 class TestConfig:
     arch_name: str   = "resnet50"
-    model_name: str  = f'v1_ad_{arch_name}_v1.1.1'
+    model_name: str  = f'v1_ad_{arch_name}_v1.2.1'
     
     model_dir: Path  = BASE_DIR / "experiments" / "models" / f"{model_name}"
     log_dir: Path    = BASE_DIR / "experiments" / "logs" / f"{model_name}"
     
     batch_size: int = 16
-    epoch: int = 790
+    epoch: int = 364
     threshold: float = 0.5
     workers: int = 8
     

@@ -55,11 +55,14 @@ def train():
     # scheduler = CosineAnnealingLR(optimizer, T_max=train_cfg.num_epochs, eta_min=1e-6)
 
     metric_train_loss = MeanMetric().to(device)
+    min_test_loss = float('inf')
     
     steps_per_epoch = len(train_loader)
     # total_steps = steps_per_epoch * train_cfg.num_epochs
+    
     for epoch in range(train_cfg.num_epochs):
         model.train()
+        metric_train_loss.reset() 
         
         for step, (image, image_name) in enumerate(train_loader):
             start = time.time()
@@ -79,10 +82,9 @@ def train():
             
             metric_train_loss.update(recon_loss)
 
-
             elapsed_time = (time.time() - start)
             if step % 1 == 0:
-                print_string = (f"Epoch: [{epoch + 1}/{train_cfg.num_epochs:>4d}] | Step: {step:>5d}/{steps_per_epoch} | " 
+                print_string = (f"Model: [{train_cfg.model_name}] | Epoch: [{epoch + 1}/{train_cfg.num_epochs:>4d}] | Step: {step:>5d}/{steps_per_epoch} | " 
                                 f"Elapsed time: {elapsed_time:.3f}sec | train_loss: {recon_loss:>.4f}")
                 print(print_string)
 
@@ -106,9 +108,11 @@ def train():
         writer.add_image('test_image/output', test_recon_image[0], global_step=epoch)
 
         # 모델 저장 코드
-        if epoch > 50 and epoch % 10 == 0:
-            torch.save(model.state_dict(), train_cfg.model_dir / f"{train_cfg.model_name}_{epoch}.pth")
-            
+        if epoch > 50 and test_loss < min_test_loss:
+            min_test_loss = test_loss
+            torch.save(model.state_dict(), train_cfg.model_dir / f"{train_cfg.model_name}_{epoch:04d}.pth")
+        elif epoch == train_cfg.num_epochs - 1:
+            torch.save(model.state_dict(), train_cfg.model_dir / f"{train_cfg.model_name}_{epoch:04d}.pth")
 
 # region - evaluation
 def evaluate(model, loss_cfg):
@@ -214,7 +218,7 @@ def main():
     elif cfg.mode == 'test':
         model = AnomalyDetector(test_cfg)
         model = model.to(device)
-        model.load_state_dict(torch.load(test_cfg.model_dir / f"{test_cfg.model_name}_{test_cfg.epoch}.pth", map_location=device))
+        model.load_state_dict(torch.load(test_cfg.model_dir / f"{test_cfg.model_name}_{test_cfg.epoch:04d}.pth", map_location=device))
         inference(model)
 
     

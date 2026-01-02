@@ -24,7 +24,7 @@ class DatasetPreprocess:
             folder_dir = [
                 osp.join(data_cfg.data_dir, mode, "Normal"),
                 osp.join(data_cfg.data_dir, mode, "P"),
-                osp.join(data_cfg.data_dir, mode, "S")
+                # osp.join(data_cfg.data_dir, mode, "S")
             ]
             for dir in folder_dir:
                 self.image_paths.extend(glob(osp.join(dir, "*.jpg")))
@@ -78,24 +78,42 @@ class diecastingDataset(Dataset):
         return image
     
     
+    def apply_center_zoom(self, image: Image.Image, zoom_factor: float):
+        width, height = image.size
+        new_width = int(width * zoom_factor)
+        new_height = int(height * zoom_factor)
+        
+        left = (width - new_width) // 2
+        top = (height - new_height) // 2
+        right = (width + new_width) // 2
+        bottom = (height + new_height) // 2
+        
+        image = image.crop((left, top, right, bottom))
+        image = image.resize((width, height), Image.LANCZOS)
+        
+        return image
+    
+    
     def __getitem__(self, idx):
         image_path = self.image_paths[idx]
         image_name = osp.split(image_path)[-1][:-4]
         image = Image.open(image_path).convert('L')
-        # image = image.crop((0, 40, image.size[0], 235))
+        
+        zoom_scale = random.uniform(0., 1.)
         image = self.get_circle_roi(image)
+        image = self.apply_center_zoom(image, zoom_factor=zoom_scale)
         
         # circle mask 적용
         # 데이터 증강
         if self.mode=='train':
             # center zoom & center crop
             data_transforms = transforms.Compose([
-                transforms.CenterCrop(224),  
+                transforms.Resize((224, 224)),
                 transforms.RandomHorizontalFlip(),             
                 transforms.RandomVerticalFlip(),               
                 transforms.RandomRotation(45),                 
                 transforms.RandomAffine(degrees=0, translate=(0.1, 0.1)),
-                transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.2),  
+                # transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.2),  
                 # transforms.RandomResizedCrop(224),
                 transforms.ToTensor(),
                 # transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
