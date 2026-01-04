@@ -3,7 +3,7 @@ import os.path as osp
 import time
 
 from die_casting_loader import diecastingDataset
-from model.die_casting_model import MultiLabelwithDensity, AnomalyDetector
+from model.die_casting_model import AnomalyDetector
 from torch.utils.tensorboard import SummaryWriter
 from torch.utils.data import DataLoader
 from configuration import BaseConfig, DataConfig, TrainConfig, TestConfig
@@ -116,7 +116,7 @@ def train():
 
 # region - evaluation
 def evaluate(model, loss_cfg):
-    dataset = diecastingDataset(data_cfg, mode='test')
+    dataset = diecastingDataset(data_cfg, test_cfg, mode='test')
     test_loader = DataLoader(dataset, 
                              shuffle=True, 
                              batch_size=test_cfg.batch_size, 
@@ -131,7 +131,7 @@ def evaluate(model, loss_cfg):
     ssim = losses.SSIM()
     ssim = ssim.to(device)
     
-    for idx, (test_image, test_label, _) in enumerate(test_loader):
+    for test_image, test_label, _ in test_loader:
         test_image = test_image.to(device)
         
         with torch.no_grad():
@@ -161,10 +161,12 @@ def evaluate(model, loss_cfg):
 
 # region - inference
 def inference(model):
+    os.makedirs(test_cfg.latent_dir, exist_ok=True)
+        
     "visualize latent space with t-SNE"
     from sklearn.manifold import TSNE
     
-    dataset = diecastingDataset(data_cfg, mode='test')
+    dataset = diecastingDataset(data_cfg, test_cfg, mode='test')
     test_loader = DataLoader(dataset, 
                              shuffle=False, 
                              batch_size=test_cfg.batch_size, 
@@ -178,7 +180,7 @@ def inference(model):
         for test_image, test_label, _ in test_loader:
             test_image = test_image.to(device)
             
-            latent = model.encoder(test_image)
+            _, latent = model.encoder(test_image)
             # t-SNE 입력을 위한 2차원으로 압축
             latent_flat = torch.mean(latent, dim=[2,3])  # (B, C, H, W) -> (B, C)
             latent_list.append(latent_flat.cpu())
@@ -187,10 +189,13 @@ def inference(model):
     all_latents = torch.cat(latent_list, dim=0).numpy()
     all_labels  = torch.cat(test_labels, dim=0)
     
-    all_labels_names = utils.label2str(data_cfg, all_labels)
+    inv_test_class = {}
+    for key, value in test_cfg.test_class_dict.items():
+        inv_test_class[value] = key
+    all_labels_names = [inv_test_class[label.item()] for label in all_labels]
     
     print('Applying t-SNE...')
-    tsne = TSNE(n_components=2, random_state=42)
+    tsne = TSNE(n_components=2, random_state=42, perplexity=30, max_iter=300)
     latents_2d = tsne.fit_transform(all_latents)
     
     df = pd.DataFrame({
@@ -205,7 +210,8 @@ def inference(model):
     plt.legend()
     plt.xlabel("feature 1")
     plt.ylabel("feature 2")
-    plt.savefig('./Normal_P.png')
+    saved_class_names = "_".join(test_cfg.target_classes)
+    plt.savefig(test_cfg.latent_dir / f"{test_cfg.model_name}_{test_cfg.epoch:04d}_{saved_class_names}.png")
     plt.close()
     
     print('done')

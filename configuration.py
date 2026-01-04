@@ -38,13 +38,13 @@ class DataConfig:
 @dataclass
 class TrainConfig:
     arch_name: str   = "resnet50"
-    model_name: str  = f'v1_ad_{arch_name}_v1.2.1'
+    model_name: str  = f'v1_ad_{arch_name}_v1.2.3'
     
     model_dir: Path  = BASE_DIR / "experiments" / "models" / f"{model_name}"
     log_dir: Path    = BASE_DIR / "experiments" / "logs" / f"{model_name}"
     code_dir: Path   = BASE_DIR / "experiments" / "codes" / f"{model_name}"
     
-    num_epochs: int  = 400
+    num_epochs: int  = 800
     batch_size: int  = 8
     workers: int     = 8
     lr: float        = 1e-4
@@ -61,14 +61,26 @@ class TrainConfig:
 @dataclass
 class TestConfig:
     arch_name: str   = "resnet50"
-    model_name: str  = f'v1_ad_{arch_name}_v1.2.1'
+    model_name: str  = f'v1_ad_{arch_name}_v1.2.3'
     
     model_dir: Path  = BASE_DIR / "experiments" / "models" / f"{model_name}"
     log_dir: Path    = BASE_DIR / "experiments" / "logs" / f"{model_name}"
+    latent_dir: Path = BASE_DIR / "experiments" / "latents" / f"{model_name}"
     
-    batch_size: int = 16
-    epoch: int = 364
-    threshold: float = 0.5
+    batch_size: int = 8
+    epoch: int = 799
     workers: int = 8
-    
-    mispred_detail: str = 'Normal'
+
+    test_class_dict: dict = field(
+        default_factory=lambda: {
+            "Normal": 0,
+            "P": 1,
+            "S": 2
+        })
+    target_classes: list = field(
+        default_factory=lambda: 
+            [
+                'Normal',
+                'P'
+                ]
+            )

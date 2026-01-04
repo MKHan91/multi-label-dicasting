@@ -21,12 +21,6 @@ def label2str(cfg, src):
     decimals = decimals.astype(str)
     names = [cfg.bit_labels[item] for item in decimals]
     
-    # for idx, item in enumerate(decimals):
-    #     try:
-    #         cfg.bit_labels[item]
-    #     except KeyError:
-    #         print(idx)
-    
     return names
 
 
