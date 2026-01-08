@@ -3,9 +3,10 @@ import torch.nn as nn
 from model.registry import MODEL_REGISTRY
 
 
-class Encoder(nn.Module):
+# region - Encoder1
+class Encoder1(nn.Module):
     def __init__(self, cfg):
-        super(Encoder, self).__init__()
+        super(Encoder1, self).__init__()
         # 사전 학습된 모델 로드 (가장 마지막 global pooling과 fc 레이어 제외)
         res =  MODEL_REGISTRY[cfg.arch_name]
         self.initial = nn.Sequential(res.conv1, res.bn1, res.relu) # 1/2 크기 (112)
@@ -15,22 +16,83 @@ class Encoder(nn.Module):
         self.layer3 = res.layer3   # 1/16 크기 (14)
         self.layer4 = res.layer4   # 1/32 크기 (7) - Bridge 역할
 
-    def forward(self, x):
-        s1 = self.initial(x)         # Skip 1
-        x = self.maxpool(s1)
-        s2 = self.layer1(x)          # Skip 2
-        s3 = self.layer2(s2)         # Skip 3
-        s4 = self.layer3(s3)         # Skip 4
-        bridge = self.layer4(s4)     # Bottleneck
+        self.flatten = nn.Flatten()
+        self.bottleneck = nn.Linear(2048*7*7, 128)
         
-        return [s1, s2, s3, s4], bridge
+        
+    def forward(self, x):
+        x = self.initial(x)
+        x = self.maxpool(x)
+        x = self.layer1(x)
 
+        # Multi-scale 특징 추출
+        f2 = self.layer2(x)
+        f3 = self.layer3(f2)
+        f4 = self.layer4(f3)
 
-class Decoder_v1(nn.Module):
+        latent = self.flatten(f4)
+        latent = self.bottleneck(latent)
+        
+        return latent, [f2, f3, f4]
+    
+
+# region - Encoder2
+class Encoder2(nn.Module):
+    def __init__(self, cfg):
+        super(Encoder2, self).__init__()
+        # 사전 학습된 모델 로드 (가장 마지막 global pooling과 fc 레이어 제외)
+        res =  MODEL_REGISTRY[cfg.arch_name]
+        self.initial = nn.Sequential(res.conv1, res.bn1, res.relu) # 1/2 크기 (112)
+        self.maxpool = res.maxpool # 1/4 크기 (56)
+        self.layer1 = res.layer1   # 1/4 크기 (56)
+        self.layer2 = res.layer2   # 1/8 크기 (28)
+        self.layer3 = res.layer3   # 1/16 크기 (14)
+        self.layer4 = res.layer4   # 1/32 크기 (7) - Bridge 역할
+
+        self.flatten = nn.Flatten()
+        self.bottleneck = nn.Linear(2048*7*7, 128)
+        
+        
+    def forward(self, x):
+        x = self.initial(x)
+        x = self.maxpool(x)
+        x = self.layer1(x)
+
+        # Multi-scale 특징 추출
+        f2 = self.layer2(x)
+        f3 = self.layer3(f2)
+        f4 = self.layer4(f3)
+        
+        # for i, b in enumerate(self.layer4):
+        #     if i == len(self.layer4) - 1: # 마지막 블록일 때
+        #         # Bottleneck 내부의 마지막 BN까지만 연산하고 ReLU는 건너뜀
+        #         identity = b.downsample(s4) if b.downsample is not None else s4
+        #         out = b.conv1(s4)
+        #         out = b.bn1(out)
+        #         out = b.relu(out)
+        #         out = b.conv2(out)
+        #         out = b.bn2(out)
+        #         out = b.relu(out)
+        #         out = b.conv3(out)
+        #         bridge = b.bn3(out)
+        #         bridge += identity
+        #     else:
+        #         s4 = b(s4)
+        latent = self.flatten(f4)
+        latent = self.bottleneck(latent)
+        
+        return latent, [f2, f3, f4]
+    
+
+# region - Decoder1
+class Decoder1(nn.Module):
     def __init__(self):
-        super(Decoder_v1, self).__init__()
+        super(Decoder1, self).__init__()
         # ResNet-50의 마지막 layer4 출력 채널은 2048입니다.
         # 단계별로 채널을 줄이며 해상도를 높입니다.
+        
+        self.fc = nn.Linear(128, 2048*7*7)
+        
         self.decoder = nn.Sequential(
             # Stage 1: 2048 -> 1024 (7x7 -> 14x14)
             nn.ConvTranspose2d(2048, 1024, kernel_size=4, stride=2, padding=1),
@@ -57,13 +119,18 @@ class Decoder_v1(nn.Module):
             nn.Sigmoid() # 이미지 픽셀 값(0~1) 출력을 위해 Sigmoid 사용
         )
         
-    def forward(self, bridge):
-        return self.decoder(bridge)
+    def forward(self, x):
+        x = self.fc(x)
+        x = x.view(-1, 2048, 7, 7)
+        x = self.decoder(x)
+        
+        return x
 
 
-class Decoder_v2(nn.Module):
+# region - Decoder2
+class Decoder2(nn.Module):
     def __init__(self):
-        super(Decoder_v2, self).__init__()
+        super(Decoder2, self).__init__()
 
         # Stage 1: bridge (2048) + s4 (1024) -> 1024
         self.up1 = nn.ConvTranspose2d(2048, 1024, kernel_size=4, stride=2, padding=1)
@@ -118,19 +185,22 @@ class Decoder_v2(nn.Module):
         return x
     
     
+    
 class AnomalyDetector(nn.Module):
     def __init__(self, cfg):
         super().__init__()
 
-        self.encoder = Encoder(cfg)
-        self.decoder1 = Decoder_v1()
-        self.decoder2 = Decoder_v2()
+        self.encoder1 = Encoder1(cfg)
+        self.encoder2 = Encoder2(cfg)
+        self.decoder1 = Decoder1()
+        self.decoder2 = Decoder2()
+        
         
     def forward(self, x):
-        skip_layers, latent = self.encoder(x) # [Batch, 2048, 7, 7]
-        reconstructed = self.decoder1(latent) # [Batch, 3, 224, 224]
-        reconstructed = self.decoder2(skip_layers, latent) # [Batch, 3, 224, 224]
-
-        return reconstructed
+        z, self.ms_features = self.encoder1(x)
+        recon = self.decoder1(z) # [Batch, 3, 224, 224]
+        # recon = self.decoder2(skip_layers, latent) # [Batch, 3, 224, 224]
+        
+        return z, recon
     
     

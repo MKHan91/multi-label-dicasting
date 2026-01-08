@@ -43,12 +43,14 @@ class DatasetPreprocess:
 
 
 class diecastingDataset(Dataset):
-    def __init__(self, data_cfg, test_cfg, mode='train'):
+    def __init__(self, data_cfg, test_cfg=None, mode='train'):
         preproceessor  = DatasetPreprocess(data_cfg, test_cfg, mode)
-        self.image_paths = preproceessor.image_paths
-        self.labels      = preproceessor.labels
         
+        self.image_paths = preproceessor.image_paths
         self.mode        = mode
+        if mode == 'test':
+            self.labels  = preproceessor.labels
+        
         
     def __len__(self):
         return len(self.image_paths)
@@ -112,8 +114,8 @@ class diecastingDataset(Dataset):
         image_name = osp.split(image_path)[-1][:-4]
         image = Image.open(image_path).convert('L')
         
+        image, bbox, circle_center = self.get_circle_roi(image)
         if self.mode=='train':
-            image, bbox, circle_center = self.get_circle_roi(image)
             image = self.apply_center_zoom(image, bbox, circle_center)
         
             data_transforms = transforms.Compose([
@@ -132,6 +134,7 @@ class diecastingDataset(Dataset):
             return image, image_name
         
         elif self.mode=='test':
+            image = Image.fromarray(image)
             image = image.convert('RGB')
             
             data_transforms = transforms.Compose([

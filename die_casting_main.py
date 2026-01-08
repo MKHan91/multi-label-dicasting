@@ -4,11 +4,10 @@ import time
 
 from die_casting_loader import diecastingDataset
 from model.die_casting_model import AnomalyDetector
-from torch.utils.tensorboard import SummaryWriter
-from torch.utils.data import DataLoader
 from configuration import BaseConfig, DataConfig, TrainConfig, TestConfig
 from losses import losses
 import utils
+import score
 
 import seaborn as sns
 import numpy as np
@@ -20,6 +19,8 @@ import torch.nn as nn
 from torchmetrics.classification import MultilabelF1Score, MultilabelPrecision, MultilabelRecall
 from torchmetrics import MeanMetric
 from torch.optim.lr_scheduler import CosineAnnealingLR
+from torch.utils.tensorboard import SummaryWriter
+from torch.utils.data import DataLoader
 
 
 # region - training
@@ -70,8 +71,8 @@ def train():
             optimizer.zero_grad()
             image = image.to(device)
             
-            pred = model(image)
-
+            z, pred = model(image)
+            
             abs_diff = torch.abs(image - pred)
             l1_loss = abs_diff.mean()
             ssim_loss = ssim(pred, image).mean()
@@ -95,7 +96,7 @@ def train():
         dataset_size = len(train_loader.dataset)
         random_indices = np.random.choice(dataset_size, 1, replace=False)
         image_sample, _ = train_loader.dataset[random_indices.item()]
-        train_recon_image = model(image_sample.unsqueeze(0).to(device))
+        train_z, train_recon_image = model(image_sample.unsqueeze(0).to(device))
         
         test_loss, test_image_sample, test_recon_image = evaluate(model, loss_cfg)
         
@@ -135,7 +136,7 @@ def evaluate(model, loss_cfg):
         test_image = test_image.to(device)
         
         with torch.no_grad():
-            pred = model(test_image)
+            z, pred = model(test_image)
             
             abs_diff = torch.abs(test_image - pred)
             l1_loss = abs_diff.mean()
@@ -154,17 +155,19 @@ def evaluate(model, loss_cfg):
     dataset_size = len(test_loader.dataset)
     random_indices = np.random.choice(dataset_size, 1, replace=False)
     test_image_sample, _, _ = test_loader.dataset[random_indices.item()]
-    test_recon_image = model(test_image_sample.unsqueeze(0).to(device))
+    test_z, test_recon_image = model(test_image_sample.unsqueeze(0).to(device))
     
     return test_loss, test_image_sample, test_recon_image
 
 
 # region - inference
 def inference(model):
-    os.makedirs(test_cfg.latent_dir, exist_ok=True)
-        
     "visualize latent space with t-SNE"
     from sklearn.manifold import TSNE
+    
+    os.makedirs(test_cfg.latent_dir, exist_ok=True)
+    
+    gram_ref_means = score.compute_train_gram(data_cfg, train_cfg, model)
     
     dataset = diecastingDataset(data_cfg, test_cfg, mode='test')
     test_loader = DataLoader(dataset, 
@@ -174,19 +177,27 @@ def inference(model):
                              num_workers=test_cfg.workers)
     
     print('Exracting latent features...')
-    latent_list = []
+    # latent_list = []
+    combined_features = [] # t-SNE에 사용할 결합 벡터
     test_labels = []
+    
+    model.eval()
     with torch.no_grad():
         for test_image, test_label, _ in test_loader:
             test_image = test_image.to(device)
             
-            _, latent = model.encoder(test_image)
-            # t-SNE 입력을 위한 2차원으로 압축
-            latent_flat = torch.mean(latent, dim=[2,3])  # (B, C, H, W) -> (B, C)
-            latent_list.append(latent_flat.cpu())
-            test_labels.append(test_label.cpu())
+            latent, feats = model.encoder(test_image)
+            recon = model.decoder1(latent)
             
-    all_latents = torch.cat(latent_list, dim=0).numpy()
+            gram_dist = score.compute_gram_distance(feats, gram_ref_means)
+            feat_vec = torch.cat([latent, gram_dist.unsqueeze(1)], dim=1)
+            
+            # latent_list.append(latent.detach().cpu())
+            combined_features.append(feat_vec.detach().cpu())
+            test_labels.append(test_label.detach().cpu())
+            
+    # all_latents = torch.cat(latent_list, dim=0).numpy()
+    all_latents = torch.cat(combined_features, dim=0).numpy()
     all_labels  = torch.cat(test_labels, dim=0)
     
     inv_test_class = {}
@@ -225,6 +236,7 @@ def main():
         model = AnomalyDetector(test_cfg)
         model = model.to(device)
         model.load_state_dict(torch.load(test_cfg.model_dir / f"{test_cfg.model_name}_{test_cfg.epoch:04d}.pth", map_location=device))
+        
         inference(model)
 
     
