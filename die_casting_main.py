@@ -25,43 +25,43 @@ from torch.utils.data import DataLoader
 
 # region - training
 def train():
-    loss_cfg = train_cfg.LossConfig()
-    writer = SummaryWriter(train_cfg.log_dir)
+    loss_cfg = tcfg.LossConfig()
+    writer = SummaryWriter(tcfg.log_dir)
     
     # 폴더 존재 점검
-    os.makedirs(train_cfg.model_dir, exist_ok=True)
-    os.makedirs(train_cfg.log_dir, exist_ok=True)
-    os.makedirs(train_cfg.code_dir, exist_ok=True)
-    utils.backup_codes(train_cfg.code_dir)
+    os.makedirs(tcfg.model_dir, exist_ok=True)
+    os.makedirs(tcfg.log_dir, exist_ok=True)
+    os.makedirs(tcfg.code_dir, exist_ok=True)
+    utils.backup_codes(tcfg.code_dir)
     
     # 모델 정의
-    model = AnomalyDetector(train_cfg)
+    model = AnomalyDetector(tcfg)
     model = model.to(device)
     
     # 학습 데이터
-    dataset = diecastingDataset(data_cfg, mode='train')
+    dataset = diecastingDataset(dcfg, mode='train')
     train_loader = DataLoader(dataset, 
                               shuffle=True, 
-                              batch_size=train_cfg.batch_size, 
+                              batch_size=tcfg.batch_size, 
                               pin_memory=True, 
-                              num_workers=train_cfg.workers)
+                              num_workers=tcfg.workers)
     
     # 최적화
-    optimizer = torch.optim.Adam(model.parameters(), lr=train_cfg.lr)
+    optimizer = torch.optim.Adam(model.parameters(), lr=tcfg.lr)
     ssim = losses.SSIM()
     ssim = ssim.to(device)
     
-    poly_lambda = lambda epoch: (1 - epoch / train_cfg.num_epochs) ** 0.9
+    poly_lambda = lambda epoch: (1 - epoch / tcfg.num_epochs) ** 0.9
     scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=poly_lambda)
-    # scheduler = CosineAnnealingLR(optimizer, T_max=train_cfg.num_epochs, eta_min=1e-6)
+    # scheduler = CosineAnnealingLR(optimizer, T_max=tcfg.num_epochs, eta_min=1e-6)
 
     metric_train_loss = MeanMetric().to(device)
     min_test_loss = float('inf')
     
     steps_per_epoch = len(train_loader)
-    # total_steps = steps_per_epoch * train_cfg.num_epochs
+    # total_steps = steps_per_epoch * tcfg.num_epochs
     
-    for epoch in range(train_cfg.num_epochs):
+    for epoch in range(tcfg.num_epochs):
         model.train()
         metric_train_loss.reset() 
         
@@ -85,7 +85,7 @@ def train():
 
             elapsed_time = (time.time() - start)
             if step % 1 == 0:
-                print_string = (f"Model: [{train_cfg.model_name}] | Epoch: [{epoch + 1}/{train_cfg.num_epochs:>4d}] | Step: {step:>5d}/{steps_per_epoch} | " 
+                print_string = (f"Model: [{tcfg.model_name}] | Epoch: [{epoch + 1}/{tcfg.num_epochs:>4d}] | Step: {step:>5d}/{steps_per_epoch} | " 
                                 f"Elapsed time: {elapsed_time:.3f}sec | train_loss: {recon_loss:>.4f}")
                 print(print_string)
 
@@ -111,13 +111,13 @@ def train():
         # 모델 저장 코드
         if epoch > 50 and test_loss < min_test_loss:
             min_test_loss = test_loss
-            torch.save(model.state_dict(), train_cfg.model_dir / f"{train_cfg.model_name}_{epoch:04d}.pth")
-        elif epoch == train_cfg.num_epochs - 1:
-            torch.save(model.state_dict(), train_cfg.model_dir / f"{train_cfg.model_name}_{epoch:04d}.pth")
+            torch.save(model.state_dict(), tcfg.model_dir / f"{tcfg.model_name}_{epoch:04d}.pth")
+        elif epoch == tcfg.num_epochs - 1:
+            torch.save(model.state_dict(), tcfg.model_dir / f"{tcfg.model_name}_{epoch:04d}.pth")
 
 # region - evaluation
 def evaluate(model, loss_cfg):
-    dataset = diecastingDataset(data_cfg, test_cfg, mode='test')
+    dataset = diecastingDataset(dcfg, test_cfg, mode='test')
     test_loader = DataLoader(dataset, 
                              shuffle=True, 
                              batch_size=test_cfg.batch_size, 
@@ -165,11 +165,13 @@ def inference(model):
     "visualize latent space with t-SNE"
     from sklearn.manifold import TSNE
     
-    os.makedirs(test_cfg.latent_dir, exist_ok=True)
+    os.makedirs(test_cfg.figure_dir, exist_ok=True)
     
-    gram_ref_means = score.compute_train_gram(data_cfg, train_cfg, model)
+    anomaly = score.AnomalyScore(dcfg, tcfg, test_cfg)
+    gram_ref_means = anomaly.compute_train_gram(model)
     
-    dataset = diecastingDataset(data_cfg, test_cfg, mode='test')
+    
+    dataset = diecastingDataset(dcfg, test_cfg, mode='test')
     test_loader = DataLoader(dataset, 
                              shuffle=False, 
                              batch_size=test_cfg.batch_size, 
@@ -177,55 +179,79 @@ def inference(model):
                              num_workers=test_cfg.workers)
     
     print('Exracting latent features...')
-    # latent_list = []
-    combined_features = [] # t-SNE에 사용할 결합 벡터
+    combined_features = []
     test_labels = []
+    all_scores = []
     
     model.eval()
     with torch.no_grad():
         for test_image, test_label, _ in test_loader:
             test_image = test_image.to(device)
             
-            latent, feats = model.encoder(test_image)
-            recon = model.decoder1(latent)
+            latent, feats = model.encoder1(test_image)
+            recon = model.decoder2(latent, feats)
             
-            gram_dist = score.compute_gram_distance(feats, gram_ref_means)
-            feat_vec = torch.cat([latent, gram_dist.unsqueeze(1)], dim=1)
+            # similarity = anomaly.compute_cosine_similarity(feats, gram_ref_means)
+            # latent_mean = latent.mean(dim=(2, 3))
+            # latent_mean = latent_mean.view(latent_mean.shape[0], 128, latent_mean.shape[-1]//128).mean(dim=2)
             
-            # latent_list.append(latent.detach().cpu())
-            combined_features.append(feat_vec.detach().cpu())
+            # feat_vec = torch.cat([latent_mean, similarity], dim=1)
+            batch_score = anomaly.compute_final_anomaly_score(recon, test_image, feats, gram_ref_means)
+            
+            # combined_features.append(feat_vec.detach().cpu())
             test_labels.append(test_label.detach().cpu())
-            
-    # all_latents = torch.cat(latent_list, dim=0).numpy()
-    all_latents = torch.cat(combined_features, dim=0).numpy()
-    all_labels  = torch.cat(test_labels, dim=0)
+            all_scores.append(batch_score.detach().cpu())
+        
+    all_scores = torch.cat(all_scores).numpy()
+    # all_latents = torch.cat(combined_features, dim=0).numpy()
+    all_labels  = torch.cat(test_labels, dim=0).numpy()
     
-    inv_test_class = {}
-    for key, value in test_cfg.test_class_dict.items():
-        inv_test_class[value] = key
-    all_labels_names = [inv_test_class[label.item()] for label in all_labels]
+    normal_indices = np.where(all_labels == 0)[0]
+    p_indices = np.where(all_labels == 1)[0]
+    s_indices = np.where(all_labels == 2)[0]
     
-    print('Applying t-SNE...')
-    tsne = TSNE(n_components=2, random_state=42, perplexity=30, max_iter=300)
-    latents_2d = tsne.fit_transform(all_latents)
+    most_common_score, threshold = anomaly.find_threshold_by_density(all_scores[normal_indices])
+
+    plt.scatter(normal_indices, all_scores[normal_indices], label='normal')
+    plt.scatter(p_indices, all_scores[p_indices], label='P')
+    plt.scatter(s_indices, all_scores[s_indices], label='S')
     
-    df = pd.DataFrame({
-        'x': latents_2d[:,0],
-        'y': latents_2d[:,1],
-        'label': all_labels_names
-    })
-    
-    plt.figure(figsize=(10, 7))
-    sns.scatterplot(data=df, x='x', y='y', hue='label', palette='tab10', alpha=0.7)
-    plt.title("t-SNE Visualization of Latent Space")
+    # plt.axhline(y=most_common_score, c='r', label='most')
+    plt.axhline(y=threshold, c='#8B0000', label='thld')
+    plt.ylim(0, 0.1)
     plt.legend()
-    plt.xlabel("feature 1")
-    plt.ylabel("feature 2")
     saved_class_names = "_".join(test_cfg.target_classes)
-    plt.savefig(test_cfg.latent_dir / f"{test_cfg.model_name}_{test_cfg.epoch:04d}_{saved_class_names}.png")
+    plt.savefig(test_cfg.figure_dir / f"{test_cfg.model_name}_{test_cfg.epoch:04d}_{saved_class_names}.png")
     plt.close()
     
-    print('done')
+    
+    
+    # inv_test_class = {}
+    # for key, value in test_cfg.test_class_dict.items():
+    #     inv_test_class[value] = key
+    # all_labels_names = [inv_test_class[label.item()] for label in all_labels]
+    
+    # print('Applying t-SNE...')
+    # tsne = TSNE(n_components=2, random_state=42, perplexity=30, max_iter=300)
+    # latents_2d = tsne.fit_transform(all_latents)
+    
+    # df = pd.DataFrame({
+    #     'x': latents_2d[:,0],
+    #     'y': latents_2d[:,1],
+    #     'label': all_labels_names
+    # })
+    
+    # plt.figure(figsize=(10, 7))
+    # sns.scatterplot(data=df, x='x', y='y', hue='label', palette='tab10', alpha=0.7)
+    # plt.title("t-SNE Visualization of Latent Space")
+    # plt.legend()
+    # plt.xlabel("feature 1")
+    # plt.ylabel("feature 2")
+    # saved_class_names = "_".join(test_cfg.target_classes)
+    # plt.savefig(test_cfg.figure_dir / f"{test_cfg.model_name}_{test_cfg.epoch:04d}_{saved_class_names}_tsne.png")
+    # plt.close()
+    
+    # print('done')
     
     
 def main():
@@ -244,8 +270,11 @@ if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     cfg         = BaseConfig()
-    data_cfg    = DataConfig()
-    train_cfg   = TrainConfig()
+    dcfg    = DataConfig()
+    tcfg   = TrainConfig()
     test_cfg    = TestConfig()
     
     main()
+    # 정상 데이터가 무엇인지 정의해야함. 
+    # Uniformity, alignment - Contrastive Learning
+    # 단위 초구 투영

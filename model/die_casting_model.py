@@ -16,24 +16,16 @@ class Encoder1(nn.Module):
         self.layer3 = res.layer3   # 1/16 크기 (14)
         self.layer4 = res.layer4   # 1/32 크기 (7) - Bridge 역할
 
-        self.flatten = nn.Flatten()
-        self.bottleneck = nn.Linear(2048*7*7, 128)
-        
         
     def forward(self, x):
         x = self.initial(x)
         x = self.maxpool(x)
-        x = self.layer1(x)
+        s1 = self.layer1(x)
+        s2 = self.layer2(s1)
+        s3 = self.layer3(s2)
+        latent = self.layer4(s3)
 
-        # Multi-scale 특징 추출
-        f2 = self.layer2(x)
-        f3 = self.layer3(f2)
-        f4 = self.layer4(f3)
-
-        latent = self.flatten(f4)
-        latent = self.bottleneck(latent)
-        
-        return latent, [f2, f3, f4]
+        return latent, [s1, s2, s3]
     
 
 # region - Encoder2
@@ -146,7 +138,8 @@ class Decoder2(nn.Module):
         
         # Stage 4: x (256) + s1 (64) -> 64
         self.up4 = nn.ConvTranspose2d(256, 64, kernel_size=4, stride=2, padding=1)
-        self.conv4 = nn.Conv2d(64 + 64, 64, kernel_size=3, padding=1)
+        self.conv4 = nn.Conv2d(64, 64, kernel_size=3, padding=1)
+        self.bn4 = nn.BatchNorm2d(64)
         
         # Stage 5: 최종 해상도 복구 (224x224)
         self.final_up = nn.ConvTranspose2d(64, 32, kernel_size=4, stride=2, padding=1)
@@ -154,29 +147,31 @@ class Decoder2(nn.Module):
         self.sigmoid = nn.Sigmoid()
 
 
-    def forward(self, skips, bridge):
-        # skips = [s1, s2, s3, s4]
-        s1, s2, s3, s4 = skips
+    def forward(self, z, skips):
+        s1, s2, s3 = skips
         
         # Stage 1 (7x7 -> 14x14)
-        x = self.up1(bridge)
-        x = torch.cat([x, s4], dim=1) # Skip Connection!
+        x = self.up1(z)
+        x = torch.cat([x, s3], dim=1) # Skip Connection!
         x = nn.functional.relu(self.conv1(x))
         
         # Stage 2 (14x14 -> 28x28)
         x = self.up2(x)
-        x = torch.cat([x, s3], dim=1)
+        x = torch.cat([x, s2], dim=1)
         x = nn.functional.relu(self.conv2(x))
         
         # Stage 3 (28x28 -> 56x56)
         x = self.up3(x)
-        x = torch.cat([x, s2], dim=1)
+        x = torch.cat([x, s1], dim=1)
         x = nn.functional.relu(self.conv3(x))
         
         # Stage 4 (56x56 -> 112x112)
         x = self.up4(x)
-        x = torch.cat([x, s1], dim=1)
-        x = nn.functional.relu(self.conv4(x))
+        # x = torch.cat([x, s1], dim=1)
+        # x = nn.functional.relu(self.conv4(x))
+        x = self.conv4(x)
+        x = self.bn4(x)
+        x = nn.functional.relu(x)
         
         # Final Stage (112x112 -> 224x224)
         x = self.final_up(x)
@@ -198,8 +193,8 @@ class AnomalyDetector(nn.Module):
         
     def forward(self, x):
         z, self.ms_features = self.encoder1(x)
-        recon = self.decoder1(z) # [Batch, 3, 224, 224]
-        # recon = self.decoder2(skip_layers, latent) # [Batch, 3, 224, 224]
+        # recon = self.decoder1(z) # [Batch, 3, 224, 224]
+        recon = self.decoder2(z, self.ms_features) # [Batch, 3, 224, 224]
         
         return z, recon
     

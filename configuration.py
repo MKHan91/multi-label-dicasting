@@ -9,7 +9,7 @@ now = datetime.now()
 
 @dataclass
 class BaseConfig:
-    mode: bool  = 'train'  # 'train' or 'test'
+    mode: bool  = 'test'  # 'train' or 'test'
 
 
 @dataclass
@@ -38,13 +38,13 @@ class DataConfig:
 @dataclass
 class TrainConfig:
     arch_name: str   = "resnet50"
-    model_name: str  = f'v1_ad_{arch_name}_v3.0.6'
+    model_name: str  = f'v1_ad_{arch_name}_v3.0.9'
     
     model_dir: Path  = BASE_DIR / "experiments" / "models" / f"{model_name}"
     log_dir: Path    = BASE_DIR / "experiments" / "logs" / f"{model_name}"
     code_dir: Path   = BASE_DIR / "experiments" / "codes" / f"{model_name}"
     
-    num_epochs: int  = 1000
+    num_epochs: int  = 1400
     batch_size: int  = 8
     workers: int     = 8
     lr: float        = 1e-4
@@ -54,21 +54,21 @@ class TrainConfig:
     
     @dataclass
     class LossConfig:
-        ssim_weight: float = 0.6
-        l1_weight: float  = 0.4
+        ssim_weight: float = 0.3
+        l1_weight: float  = 1.
     
 
 @dataclass
 class TestConfig:
     arch_name: str   = "resnet50"
-    model_name: str  = f'v1_ad_{arch_name}_v3.0.1'
+    model_name: str  = f'v1_ad_{arch_name}_v3.0.7'
     
     model_dir: Path  = BASE_DIR / "experiments" / "models" / f"{model_name}"
     log_dir: Path    = BASE_DIR / "experiments" / "logs" / f"{model_name}"
-    latent_dir: Path = BASE_DIR / "experiments" / "latents" / f"{model_name}"
+    figure_dir: Path = BASE_DIR / "experiments" / "figure" / f"{model_name}"
     
     batch_size: int = 8
-    epoch: int = 999
+    epoch: int = 1199
     workers: int = 8
 
     test_class_dict: dict = field(
@@ -85,3 +85,6 @@ class TestConfig:
                 'S'
                 ]
             )
+    
+    test_ssim_weight: float = 0.45
+    test_l1_weight: float = 0.55
